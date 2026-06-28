@@ -1,0 +1,12 @@
+# Tooling configuration only. Runtime/test dependencies are declared in
+# requirements.txt (see README); ruff and pytest are configured here.
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+# ruff defaults (E4/E7/E9, F) plus import sorting.
+extend-select = ["I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

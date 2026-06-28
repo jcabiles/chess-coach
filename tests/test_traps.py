@@ -7,7 +7,6 @@ No Stockfish needed. Uses tests/fixtures/traps_sample.json only.
 from __future__ import annotations
 
 import json
-import os
 
 import chess
 import pytest

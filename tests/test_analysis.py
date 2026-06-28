@@ -22,7 +22,6 @@ from app.analysis import (
     pov_score_to_white_cp,
 )
 
-
 # --- pov_score_to_white_cp: centipawn scores ---------------------------------
 
 

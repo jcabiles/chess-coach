@@ -1,0 +1,3 @@
+# Dev/CI tooling. Installs the runtime + test deps, then adds the linter.
+-r requirements.txt
+ruff==0.15.20
