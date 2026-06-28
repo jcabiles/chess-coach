@@ -1,6 +1,6 @@
 # Tickets — Opening Traps (Phase 1)
 
-Spec: `docs/ai-dlc/specs/opening-traps.md`. Research: `docs/ai-dlc/research/opening-traps.md`.
+Spec: `docs/design/specs/opening-traps.md`. Research: `docs/design/research/opening-traps.md`.
 `[P]` = parallelizable once deps met. One owner per file. Hotspots: `app/main.py`
 (TT3), `static/app.js` (TT4 → TT5 → TT6, same owner → **sequential**). All EPDs
 derived server-side via python-chess `board.epd()` (same convention as the opening

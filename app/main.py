@@ -4,7 +4,7 @@ Wires together the engine wrapper (:mod:`app.engine`), the pure classification
 logic (:mod:`app.analysis`), and the request/response schemas
 (:mod:`app.models`), and serves the static frontend.
 
-Server responsibilities (see docs/ai-dlc/specs/stockfish-analysis-board.md):
+Server responsibilities (see docs/design/specs/stockfish-analysis-board.md):
 
 * Authoritative legality check with python-chess on every move.
 * Build the single shared ``Analysis`` object the same way for every endpoint.

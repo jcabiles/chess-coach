@@ -6,7 +6,7 @@ bait ply per variation, a legal refutation + decline continuation, claimed
 checkmates that really mate, and claimed material wins that reach the stated
 delta. No Stockfish binary is required.
 
-This is Verify-by #1 from docs/ai-dlc/specs/opening-traps.md.
+This is Verify-by #1 from docs/design/specs/opening-traps.md.
 """
 
 from __future__ import annotations

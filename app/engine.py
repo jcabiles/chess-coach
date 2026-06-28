@@ -3,7 +3,7 @@
 This module owns the lifecycle of a SINGLE Stockfish UCI process and exposes a
 safe async surface for analyzing positions.
 
-Design notes / constraints (see docs/ai-dlc/specs/stockfish-analysis-board.md):
+Design notes / constraints (see docs/design/specs/stockfish-analysis-board.md):
 
 * One process only. ``chess.engine.SimpleEngine.popen_uci`` launches a long-lived
   Stockfish subprocess; we keep exactly one alive for the app's lifetime and reuse

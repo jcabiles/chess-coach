@@ -1,7 +1,7 @@
 # Tickets — Repertoire Trainer (tree + jump + practice)
 
-Spec: `docs/ai-dlc/specs/repertoire-trainer.md`. Contracts:
-`docs/ai-dlc/contracts/repertoire-trainer.md`. Slug: `repertoire-trainer`.
+Spec: `docs/design/specs/repertoire-trainer.md`. Contracts:
+`docs/design/contracts/repertoire-trainer.md`. Slug: `repertoire-trainer`.
 8 tickets. "Owns" = the only files that ticket may edit (one file = one owner).
 Refuter-folded fixes are flagged inline.
 

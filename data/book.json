@@ -1,5 +1,5 @@
 {
-  "_comment": "Opening-book fast-path repertoire config (see docs/ai-dlc/specs/opening-book-fastpath.md). The book = every lichess line in data/openings/ whose FIRST move is in firstMoves, PLUS all trap mainlines (when includeTraps), PLUS any extraLines. A move is 'book' if the position it reaches is in that set, so /api/move can skip Stockfish. Broaden/narrow by editing firstMoves; e2e4 covers the White repertoire + all Black defenses to 1.e4 (incl. the whole Sicilian), d2d4 covers Black's Indian + White's d4 systems. Add flank openings later with e.g. c2c4, g1f3.",
+  "_comment": "Opening-book fast-path repertoire config (see docs/design/specs/opening-book-fastpath.md). The book = every lichess line in data/openings/ whose FIRST move is in firstMoves, PLUS all trap mainlines (when includeTraps), PLUS any extraLines. A move is 'book' if the position it reaches is in that set, so /api/move can skip Stockfish. Broaden/narrow by editing firstMoves; e2e4 covers the White repertoire + all Black defenses to 1.e4 (incl. the whole Sicilian), d2d4 covers Black's Indian + White's d4 systems. Add flank openings later with e.g. c2c4, g1f3.",
   "firstMoves": ["e2e4", "d2d4"],
   "includeTraps": true,
   "extraLines": []

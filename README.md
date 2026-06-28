@@ -1,5 +1,7 @@
 # Chess Training — Stockfish Analysis Board
 
+[![CI](https://github.com/jcabiles/chess-training/actions/workflows/ci.yml/badge.svg)](https://github.com/jcabiles/chess-training/actions/workflows/ci.yml)
+
 A local, single-user web app: an interactive chess board where you move **both
 colors** freely, jump to any position by FEN, and get **live Stockfish feedback**
 (eval, best move + line, move-quality label) after every move.
@@ -61,7 +63,7 @@ The opening trainer uses the bundled lichess-org/chess-openings TSVs under
   plays the standard blunder — find the punishing moves (wrong moves revert; "Reveal"
   hints, "Show refutation" gives the defense). A **Trap available** chip appears
   during play when you reach a known trap's starting position. Data lives in
-  `data/traps.json` (engine-verified, original commentary; 11 traps shipped).
+  `data/traps.json` (engine-verified, original commentary; 19 traps shipped).
 
 ## Develop / test
 ```sh
@@ -74,8 +76,14 @@ pytest tests/test_analysis.py   # pure logic, no Stockfish needed
 app/        FastAPI app, engine wrapper, analysis logic, models
 static/     frontend files; chessground/chessops loaded from pinned CDN URLs
 tests/      unit + API tests
-docs/ai-dlc/  spec + ticket plan for this build
+docs/design/  design specs, build plans, and research notes per feature
 ```
 
 ## Frontend asset versions
 Pinned in `static/index.html`.
+
+## Development
+
+Built solo with an AI-assisted workflow (Claude Code + Codex). The per-feature
+design specs and build plans under `docs/design/` are the running record of how
+each piece was scoped and verified.

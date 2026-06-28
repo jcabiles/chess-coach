@@ -3,7 +3,7 @@
 **Status:** Reviewed (Gate 1 confirmed; refuter pass folded in — 3 blockers, 5 major, 3 minor)
 **Slug:** `opening-traps`
 **Type:** Feature on the existing Stockfish Analysis Board app, building on the
-opening trainer (`docs/ai-dlc/specs/opening-trainer.md`).
+opening trainer (`docs/design/specs/opening-trainer.md`).
 
 ## Goal (one line)
 Let the user learn **opening traps** — deep, multi-move lines where you deliberately
@@ -26,7 +26,7 @@ when a real game reaches a trap's starting position. All offline/free.
 
 ## Data source — `data/traps.json` (authored in-repo, engine-verified)
 Not downloaded — authored during the build from the research notes
-(`docs/ai-dlc/research/opening-traps.md`) and **engine-verified** before shipping.
+(`docs/design/research/opening-traps.md`) and **engine-verified** before shipping.
 
 ### Format
 ```json

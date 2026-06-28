@@ -1,6 +1,6 @@
 # Tickets — Opening Trainer (Phase 1)
 
-Spec: `docs/ai-dlc/specs/opening-trainer.md`. `[P]` = parallelizable once deps met.
+Spec: `docs/design/specs/opening-trainer.md`. `[P]` = parallelizable once deps met.
 One owner per file. Hotspots: `app/main.py` (T4), `static/app.js` (T5 → T6, same
 owner → sequential). All EPDs derived server-side via python-chess `board.epd()`.
 

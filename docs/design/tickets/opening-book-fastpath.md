@@ -1,6 +1,6 @@
 # Tickets — Opening Book Fast-Path
 
-Spec: `docs/ai-dlc/specs/opening-book-fastpath.md`. Slug: `opening-book-fastpath`.
+Spec: `docs/design/specs/opening-book-fastpath.md`. Slug: `opening-book-fastpath`.
 ≤8 tickets. "Owned files" = the only files that ticket may edit (one file = one owner).
 
 ---

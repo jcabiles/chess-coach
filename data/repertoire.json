@@ -1,5 +1,5 @@
 {
-  "_comment": "Curated repertoire for the Repertoire Trainer (see docs/ai-dlc/specs/repertoire-trainer.md). Each entry is one named line. A line has either a SAN 'line' (replayed from the standard start by app/repertoire.py, which validates legality and derives UCIs) OR a 'trapId' (+ optional 'variation') that reuses a line from data/traps.json. 'yourColor' is the side you play; the loader groups by color -> parentOpening -> line and builds a per-color move tree for practice. Invariant: at a node where it is YOUR turn, exactly one prepared move; opponent-turn nodes may branch (variety). Grow this file by adding entries.",
+  "_comment": "Curated repertoire for the Repertoire Trainer (see docs/design/specs/repertoire-trainer.md). Each entry is one named line. A line has either a SAN 'line' (replayed from the standard start by app/repertoire.py, which validates legality and derives UCIs) OR a 'trapId' (+ optional 'variation') that reuses a line from data/traps.json. 'yourColor' is the side you play; the loader groups by color -> parentOpening -> line and builds a per-color move tree for practice. Invariant: at a node where it is YOUR turn, exactly one prepared move; opponent-turn nodes may branch (variety). Grow this file by adding entries.",
   "lines": [
     {
       "id": "italian-giuoco-pianissimo",

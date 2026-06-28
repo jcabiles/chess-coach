@@ -1,6 +1,6 @@
 # Tickets — Stockfish Analysis Board
 
-Spec: `docs/ai-dlc/specs/stockfish-analysis-board.md`. Build order respects deps; `[P]` = parallelizable once deps met. One owner per file.
+Spec: `docs/design/specs/stockfish-analysis-board.md`. Build order respects deps; `[P]` = parallelizable once deps met. One owner per file.
 
 ---
 

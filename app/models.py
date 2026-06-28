@@ -3,7 +3,7 @@
 Pure data definitions only — no logic, no engine/`chess` imports. The single
 shared :class:`Analysis` object is returned identically by all three endpoints
 (`/api/move`, `/api/analyze`, `/api/load`); see
-``docs/ai-dlc/specs/stockfish-analysis-board.md`` (API section).
+``docs/design/specs/stockfish-analysis-board.md`` (API section).
 """
 
 from typing import Literal
