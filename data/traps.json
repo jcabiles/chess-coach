@@ -852,6 +852,252 @@
           ]
         }
       ]
+    },
+    {
+      "id": "siberian-trap",
+      "name": "Siberian Trap",
+      "color": "black",
+      "eco": "B21",
+      "parentOpening": "Sicilian Defense, Smith-Morra Gambit",
+      "commonness": 3,
+      "engineNote": "Black is comfortably equal-to-better against the Smith-Morra here, and the ...Ng4/...Nd4 idea is genuinely strong: the knight forks the e2-queen and f3-knight while threatening ...Qh2#. If White grabs the d4-knight with the f3-knight, that defender of h2 vanishes and it is mate; every other reply drops the queen to ...Nxe2+. It scores heavily because gambit players reflexively recapture.",
+      "startFen": "r1b1kb1r/ppqp1ppp/2n1p3/8/2B1P1n1/2N2N2/PP2QPPP/R1B2RK1 w kq - 6 9",
+      "leadInSan": ["e4", "c5", "d4", "cxd4", "c3", "dxc3", "Nxc3", "Nc6", "Nf3", "e6", "Bc4", "Qc7", "Qe2", "Nf6", "O-O", "Ng4"],
+      "variations": [
+        {
+          "label": "9.h3?? Nd4! 10.Nxd4?? Qh2#",
+          "mainLine": [
+            {
+              "san": "h3",
+              "uci": "h2h3",
+              "side": "victim",
+              "bait": true,
+              "note": "The natural 'kick the knight' move — but it ignores that ...Nd4 is already crashing in, and h3 only opens h2 for the mate.",
+              "refutation": {
+                "san": "Nd5",
+                "uci": "c3d5",
+                "note": "The defense: counterattack the c7-queen with Nd5. Black must deal with his own queen, so the ...Nd4 fork never lands and h2 stays safe.",
+                "declineSan": ["exd5", "Bxd5"],
+                "assessment": "After 9.Nd5 exd5 10.Bxd5 White has untangled and is fighting on with normal Smith-Morra play; the mating trap is gone."
+              }
+            },
+            {
+              "san": "Nd4",
+              "uci": "c6d4",
+              "side": "trapper",
+              "note": "The hammer: the knight forks the e2-queen and the f3-knight and renews the threat of ...Qh2#."
+            },
+            {
+              "san": "Nxd4",
+              "uci": "f3d4",
+              "side": "victim",
+              "forced": true,
+              "note": "Recapturing the 'free' knight is the human move — but it removes the f3-knight, the only piece guarding h2. Every alternative loses the queen to ...Nxe2+."
+            },
+            {
+              "san": "Qh2#",
+              "uci": "c7h2",
+              "side": "trapper",
+              "result": "checkmate",
+              "note": "The queen lands on h2 supported by the g4-knight; with f3 vacated and h3 played, the castled king has no escape. Mate."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "kieninger-trap",
+      "name": "Kieninger Trap",
+      "color": "black",
+      "eco": "A52",
+      "parentOpening": "Budapest Gambit",
+      "commonness": 2,
+      "engineNote": "The Budapest is fully playable for Black, and this is its signature trick. Black's pieces swarm the d3-square; the threat is ...Nd3 smothered mate. If White greedily snatches the b4-bishop with a3xb4, the d3-mate is unstoppable. The sound defense Nxe5 trades off an attacker and keeps White only slightly worse.",
+      "startFen": "r1b1k2r/ppppqppp/2n5/4n3/1bP2B2/P4N2/1P1NPPPP/R2QKB1R w KQkq - 0 8",
+      "leadInSan": ["d4", "Nf6", "c4", "e5", "dxe5", "Ng4", "Bf4", "Nc6", "Nf3", "Bb4+", "Nbd2", "Qe7", "a3", "Ngxe5"],
+      "variations": [
+        {
+          "label": "8.axb4?? Nd3#",
+          "mainLine": [
+            {
+              "san": "axb4",
+              "uci": "a3b4",
+              "side": "victim",
+              "bait": true,
+              "note": "Winning the b4-bishop looks free — but it ignores that the e5-knight is about to deliver a smothered mate on d3.",
+              "refutation": {
+                "san": "Nxe5",
+                "uci": "f3e5",
+                "note": "The defense: capture one of the attacking knights first with Nxe5, removing the piece that would mate on d3.",
+                "declineSan": ["Nxe5", "e3"],
+                "assessment": "After 8.Nxe5 Nxe5 9.e3 White has defused the threat and is only slightly worse, a pawn down with the Budapest's usual compensation neutralized."
+              }
+            },
+            {
+              "san": "Nd3#",
+              "uci": "e5d3",
+              "side": "trapper",
+              "result": "checkmate",
+              "note": "The smothered mate: the knight checks on d3, and White's own queen, bishop, knight, and pawns box in the e1-king. Mate."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "caro-kann-smothered-mate",
+      "name": "Caro-Kann Smothered Mate",
+      "color": "white",
+      "eco": "B15",
+      "parentOpening": "Caro-Kann Defense",
+      "commonness": 2,
+      "engineNote": "Objectively just a quiet line where White is fine, but 5.Qe2! lays a famous trap: the queen pins the e-file from behind, so if Black blocks it with the natural 5...Ngf6, then 6.Nd6 is mate — the e7-pawn is pinned and cannot capture the knight. Developing the other knight (5...Ndf6) sidesteps it entirely.",
+      "startFen": "r1bqkbnr/pp1npppp/2p5/8/3PN3/8/PPP1QPPP/R1B1KBNR b KQkq - 2 5",
+      "leadInSan": ["e4", "c6", "d4", "d5", "Nc3", "dxe4", "Nxe4", "Nd7", "Qe2"],
+      "variations": [
+        {
+          "label": "5...Ngf6?? 6.Nd6#",
+          "mainLine": [
+            {
+              "san": "Ngf6",
+              "uci": "g8f6",
+              "side": "victim",
+              "bait": true,
+              "note": "Developing the kingside knight is the most natural move on the board — but it walks the knight in front of its own king and allows a one-move mate.",
+              "refutation": {
+                "san": "Ndf6",
+                "uci": "d7f6",
+                "note": "Develop the OTHER knight: 5...Ndf6 keeps the e-file from becoming fatal and meets Nxf6 with a clean recapture.",
+                "declineSan": ["Nxf6+", "Nxf6"],
+                "assessment": "After 5...Ndf6 6.Nxf6+ Nxf6 the position is roughly equal; the trap never gets a chance to fire."
+              }
+            },
+            {
+              "san": "Nd6#",
+              "uci": "e4d6",
+              "side": "trapper",
+              "result": "checkmate",
+              "note": "The knight jumps to d6 with check. The e7-pawn is pinned against the king by the e2-queen, so it cannot take, and the king is boxed in by its own pieces. Mate."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mortimer-trap",
+      "name": "Mortimer Trap",
+      "color": "black",
+      "eco": "C65",
+      "parentOpening": "Ruy Lopez, Berlin Defense",
+      "commonness": 2,
+      "engineNote": "The Mortimer Defense (4...Ne7) is objectively passive and slightly worse for Black, but it is pure bait: it invites 5.Nxe5??, when 5...c6 attacks the b5-bishop and, after it moves, 6...Qa5+ forks the king and the now-undefended e5-knight, winning a clean piece. White's correct reply is simply to develop and leave e5 alone.",
+      "startFen": "r1bqkb1r/ppppnppp/5n2/1B2p3/4P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 1 5",
+      "leadInSan": ["e4", "e5", "Nf3", "Nc6", "Bb5", "Nf6", "d3", "Ne7"],
+      "variations": [
+        {
+          "label": "5.Nxe5?? c6 6.Bc4 Qa5+ 7.Nc3 Qxe5",
+          "mainLine": [
+            {
+              "san": "Nxe5",
+              "uci": "f3e5",
+              "side": "victim",
+              "bait": true,
+              "note": "Grabbing the 'free' e5-pawn — exactly what the passive-looking 4...Ne7 was inviting.",
+              "refutation": {
+                "san": "Nc3",
+                "uci": "b1c3",
+                "note": "Don't take the bait: just develop. The e5-pawn is poisoned, so leave it and finish development.",
+                "declineSan": ["Ng6", "O-O"],
+                "assessment": "After 5.Nc3 Ng6 6.O-O White is comfortably better with a normal Ruy Lopez and no tactics to fear."
+              }
+            },
+            {
+              "san": "c6",
+              "uci": "c7c6",
+              "side": "trapper",
+              "note": "Hitting the b5-bishop. Wherever it retreats, the e5-knight will be left hanging to a queen check."
+            },
+            {
+              "san": "Bc4",
+              "uci": "b5c4",
+              "side": "victim",
+              "note": "Retreating the bishop — but any bishop move allows the fork. The knight on e5 is now defended by nothing."
+            },
+            {
+              "san": "Qa5+",
+              "uci": "d8a5",
+              "side": "trapper",
+              "note": "The double attack: the queen checks along the a5-e1 diagonal and simultaneously eyes the e5-knight along the fifth rank."
+            },
+            {
+              "san": "Nc3",
+              "uci": "b1c3",
+              "side": "victim",
+              "forced": true,
+              "note": "Blocking the check — but it does nothing to save the e5-knight. Every reply to the check leaves it hanging."
+            },
+            {
+              "san": "Qxe5",
+              "uci": "a5e5",
+              "side": "trapper",
+              "result": "wins-material",
+              "note": "Black collects the knight and emerges a clean piece up."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qga-b5-trap",
+      "name": "Queen's Gambit Accepted b5 Trap",
+      "color": "white",
+      "eco": "D20",
+      "parentOpening": "Queen's Gambit Accepted",
+      "commonness": 2,
+      "engineNote": "Trying to hold the extra c4-pawn with ...b5 is a well-known mistake; the b5-pawn is overextended and falls in every line. The trap is the follow-up: after 6.Nc3 the natural 6...a6?? defends b5 but runs into 7.Nxb5! axb5 8.Rxa8, winning the exchange. Conceding the pawn with 6...e6 keeps Black only slightly worse.",
+      "startFen": "rnbqkbnr/p3pppp/8/1p6/2pP4/2N2N2/1P2PPPP/R1BQKB1R b KQkq - 1 6",
+      "leadInSan": ["d4", "d5", "c4", "dxc4", "Nf3", "b5", "a4", "c6", "axb5", "cxb5", "Nc3"],
+      "variations": [
+        {
+          "label": "6...a6?? 7.Nxb5! axb5 8.Rxa8",
+          "mainLine": [
+            {
+              "san": "a6",
+              "uci": "a7a6",
+              "side": "victim",
+              "bait": true,
+              "note": "Defending the b5-pawn with the a-pawn looks solid — but it loses the exchange to a knight sacrifice.",
+              "refutation": {
+                "san": "e6",
+                "uci": "e7e6",
+                "note": "Give the b5-pawn back instead of trying to hold it: 6...e6 develops and accepts that the gambit pawn was always going to fall.",
+                "declineSan": ["Nxb5", "Nf6"],
+                "assessment": "After 6...e6 7.Nxb5 Black has conceded only a pawn and avoids the exchange disaster, standing slightly worse but playable."
+              }
+            },
+            {
+              "san": "Nxb5",
+              "uci": "c3b5",
+              "side": "trapper",
+              "note": "The point: a knight sacrifice that, after the recapture, wins the a8-rook on the open a-file. Declining with 7...Qxd4 runs into 8.Nxc7+ forking king and rook."
+            },
+            {
+              "san": "axb5",
+              "uci": "a6b5",
+              "side": "victim",
+              "forced": true,
+              "note": "Recapturing the knight is forced — but it opens the a-file straight onto the a8-rook."
+            },
+            {
+              "san": "Rxa8",
+              "uci": "a1a8",
+              "side": "trapper",
+              "result": "wins-material",
+              "note": "The rook scoops a8, winning the exchange (rook for knight). White emerges with a decisive material advantage."
+            }
+          ]
+        }
+      ]
     }
   ]
 }
