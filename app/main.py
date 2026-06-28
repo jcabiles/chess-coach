@@ -16,7 +16,6 @@ The server is stateless per request: move history / undo lives client-side.
 
 from __future__ import annotations
 
-import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -33,7 +32,6 @@ from app.models import (
     Analysis,
     AnalyzeRequest,
     AnalyzeResponse,
-    CommentaryRequest,
     LoadRequest,
     LoadResponse,
     MoveRequest,
@@ -48,23 +46,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "static"
 INDEX_HTML = STATIC_DIR / "index.html"
 OPENINGS_DIR = BASE_DIR / "data" / "openings"
-COMMENTARY_FILE = BASE_DIR / "data" / "commentary.json"
 TRAPS_FILE = BASE_DIR / "data" / "traps.json"
-
-
-def _load_commentary() -> dict:
-    """Load bundled opening commentary (EPD -> {san, text}); empty if absent."""
-    try:
-        with COMMENTARY_FILE.open(encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            return data
-        logger.warning("commentary.json is not a JSON object — ignoring.")
-    except FileNotFoundError:
-        logger.warning("commentary.json not found — move commentary disabled.")
-    except (OSError, json.JSONDecodeError) as exc:
-        logger.warning("commentary.json could not be loaded: %s", exc)
-    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -82,9 +64,8 @@ async def lifespan(app: FastAPI):
     except EngineUnavailable as exc:
         logger.warning("Stockfish unavailable at startup: %s", exc)
 
-    # Opening trainer data (both degrade gracefully if files are absent).
+    # Opening name detection + traps (both degrade gracefully if files absent).
     openings.init(str(OPENINGS_DIR))
-    app.state.commentary = _load_commentary()
     traps.init(str(TRAPS_FILE))
 
     try:
@@ -234,33 +215,13 @@ async def make_move(req: MoveRequest, engine: StockfishEngine = Depends(get_engi
 # ---------------------------------------------------------------------------
 @app.post("/api/opening")
 async def opening_info(req: OpeningRequest):
-    """Live opening detection + candidate continuations for the current line.
+    """Live opening detection (name + ECO) for the current line.
 
     Server derives all EPDs from baseFen + UCI moves (the client never sends
-    EPDs). Always returns a well-formed body; empty/degraded when data is absent.
+    EPDs). Always returns a well-formed body; ``current`` is null when no named
+    opening matches or when data is absent.
     """
-    current = openings.identify(req.baseFen, req.moves)
-    cand = {"items": [], "truncated": False}
-    try:
-        board = chess.Board(req.baseFen)
-        for uci in req.moves:
-            board.push_uci(uci)
-        cand = openings.candidates(board.fen(), q=req.q)
-    except Exception:
-        # A malformed line never breaks detection — just yields no candidates.
-        pass
-    return {
-        "current": current,
-        "candidates": cand["items"],
-        "truncated": cand["truncated"],
-    }
-
-
-@app.post("/api/opening/commentary")
-async def opening_commentary(req: CommentaryRequest, request: Request):
-    """Bundled 'why this move' commentary for a position (EPD lookup), or null."""
-    commentary = getattr(request.app.state, "commentary", {}) or {}
-    return openings.commentary_lookup(req.fen, commentary)
+    return {"current": openings.identify(req.baseFen, req.moves)}
 
 
 # ---------------------------------------------------------------------------

@@ -2,12 +2,11 @@
 
 The opening index is repopulated from the test fixture TSV after the app's
 lifespan runs (production data isn't present in CI/sandbox), so these tests are
-independent of the downloaded data set. Commentary uses the real bundled file.
+independent of the downloaded data set.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import chess
@@ -18,7 +17,6 @@ from app import openings
 from app.main import app
 
 FIXTURE_DIR = str(Path(__file__).parent / "fixtures")
-COMMENTARY_FILE = Path(__file__).parent.parent / "data" / "commentary.json"
 
 START = chess.STARTING_FEN
 
@@ -57,35 +55,6 @@ def test_opening_identify_transposition(client):
     assert direct is not None
 
 
-def test_opening_candidates_shape_and_filter(client):
-    r = client.post("/api/opening", json={"baseFen": START, "moves": ["e2e4"]})
-    body = r.json()
-    assert isinstance(body["candidates"], list)
-    assert isinstance(body["truncated"], bool)
-    for item in body["candidates"]:
-        assert {"eco", "name", "uci", "san"} <= item.keys()
-
-    # Name filter narrows the list.
-    filtered = client.post("/api/opening", json={
-        "baseFen": START, "moves": ["e2e4"], "q": "ruy",
-    }).json()
-    assert all("ruy" in i["name"].lower() for i in filtered["candidates"])
-
-
-def test_commentary_hit_and_miss(client):
-    # Pick a real EPD from the bundled commentary file and round-trip it.
-    data = json.loads(COMMENTARY_FILE.read_text())
-    sample_epd = next(iter(data))
-    fen = sample_epd + " 0 1"  # EPD + clocks = a valid FEN for the same position
-    hit = client.post("/api/opening/commentary", json={"fen": fen}).json()
-    assert hit is not None
-    assert hit["text"] and hit["san"]
-
-    # A position with no commentary → null.
-    miss = client.post("/api/opening/commentary", json={"fen": START}).json()
-    assert miss is None
-
-
 def test_opening_degraded_when_data_absent(client):
     # Point the index at a nonexistent dir → empty, well-formed response (no 500).
     openings.load("/nonexistent-openings-dir")
@@ -94,7 +63,7 @@ def test_opening_degraded_when_data_absent(client):
     })
     assert r.status_code == 200
     body = r.json()
-    assert body == {"current": None, "candidates": [], "truncated": False}
+    assert body["current"] is None
 
 
 def test_opening_handles_malformed_line(client):
@@ -103,4 +72,3 @@ def test_opening_handles_malformed_line(client):
         "baseFen": START, "moves": ["e2e4", "zzzz"],
     })
     assert r.status_code == 200
-    assert "candidates" in r.json()

@@ -173,39 +173,7 @@ button.primary:hover { filter: brightness(1.08); }
 .status.error { color: var(--error); }
 
 /* ---- Opening panel ---- */
-.opening-name { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.6rem; }
-#opening-filter {
-  width: 100%;
-  background: #222;
-  color: var(--text);
-  border: 1px solid #555;
-  border-radius: 6px;
-  padding: 0.35rem 0.5rem;
-  font-size: 0.85rem;
-  margin-bottom: 0.4rem;
-}
-#opening-filter:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.opening-candidates { display: flex; flex-direction: column; gap: 0.2rem; max-height: 220px; overflow-y: auto; }
-.opening-candidates button {
-  text-align: left;
-  font-size: 0.85rem;
-  padding: 0.35rem 0.5rem;
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.opening-candidates .cand-eco { color: var(--muted); font-variant-numeric: tabular-nums; }
-.opening-candidates .cand-empty { color: var(--muted); font-size: 0.82rem; padding: 0.3rem 0; }
-.opening-truncated { color: var(--muted); font-size: 0.78rem; margin-top: 0.3rem; }
-
-/* ---- Study walkthrough ---- */
-/* In study mode the board is a read-only walkthrough → hide play + setup controls. */
-body.study-mode #undo,
-body.study-mode #redo,
-body.study-mode #reset,
-body.study-mode #setup-toggle,
-body.study-mode .fen-row,
-body.study-mode #fen-error { display: none; }
+.opening-name { font-size: 1.05rem; font-weight: 600; }
 
 /* ---- Trap watch + practice modes ---- */
 /* In both trap modes the play + setup controls are hidden (the board is either
@@ -222,27 +190,6 @@ body.trap-practice-mode #reset,
 body.trap-practice-mode #setup-toggle,
 body.trap-practice-mode .fen-row,
 body.trap-practice-mode #fen-error { display: none; }
-
-.study-bar {
-  width: 480px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  background: var(--panel-bg);
-  border-radius: 10px;
-  padding: 0.8rem 0.9rem;
-}
-.study-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
-.study-title { font-weight: 600; }
-.study-stepper { display: flex; align-items: center; gap: 0.4rem; }
-.study-step { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 4rem; text-align: center; }
-.study-move-san { font-size: 1.05rem; font-weight: 600; }
-.study-eval { color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 0.4rem; }
-.study-commentary { font-size: 0.9rem; line-height: 1.5; color: var(--text); }
-
-@media (max-width: 560px) {
-  .study-bar { width: 92vw; }
-}
 
 /* ---- Traps section ---- */
 .traps-section { display: flex; flex-direction: column; gap: 0.4rem; }
@@ -362,8 +309,7 @@ body.trap-practice-mode #fen-error { display: none; }
 .promo-overlay[hidden] { display: none; }
 
 /* Same trap: any flex bar toggled via `hidden` needs this so the attribute wins. */
-.setup-bar[hidden],
-.study-bar[hidden] { display: none; }
+.setup-bar[hidden] { display: none; }
 .promo-box {
   background: var(--panel-bg);
   border-radius: 10px;

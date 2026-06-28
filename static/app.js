@@ -10,7 +10,6 @@
 //   'setup'         — free piece placement / palette editor, evaluator paused. On
 //                     "Begin Game" the position is validated + committed as the new
 //                     starting position (reusing the /api/load path).
-//   'study'         — read-only walkthrough of an opening line (view-only board).
 //   'trap-watch'    — read-only step-through of a trap variation (view-only board).
 //   'trap-practice' — interactive drill: the app auto-plays the victim's scripted
 //                     replies; the user must find each trapper move. Legal-but-wrong
@@ -41,7 +40,7 @@ const PIECE_CODES = {
 // State
 // ---------------------------------------------------------------------------
 const state = {
-  mode: 'play',     // 'play' | 'setup' | 'study' | 'trap-watch' | 'trap-practice'
+  mode: 'play',     // 'play' | 'setup' | 'trap-watch' | 'trap-practice'
   baseFen: INITIAL_FEN,
   moves: [],        // UCI strings applied from baseFen
   cursor: 0,        // how many of `moves` are currently applied
@@ -52,10 +51,8 @@ const state = {
 let ground = null;
 let playSnapshot = null;   // saved play state captured when entering setup (for Cancel)
 let brush = null;          // setup tool: null = move/drag, 'erase', or a piece object
-let studySnapshot = null;  // saved play state captured when entering study OR trap (separate!)
-let study = null;          // active study walkthrough { name, eco, san, uci, fens, step, max }
-let openingFilter = '';    // current candidate filter text
-let studyEvalToken = 0;    // guards out-of-order async eval/commentary while stepping (study + trap-watch share)
+let studySnapshot = null;  // saved play state captured when entering a trap (restored on exit)
+let studyEvalToken = 0;    // guards out-of-order async eval while stepping a trap (watch/practice)
 let trapsData = [];        // all trap summaries fetched on load
 let trapsCheckToken = 0;   // guards stale /api/traps/check responses (mirrors studyEvalToken)
 let trapChipDismissedFen = null; // sticky dismiss: EPD/FEN string for which the chip was dismissed
@@ -72,7 +69,6 @@ const byId = (id) => document.getElementById(id);
 const STORAGE_KEY = 'chess-training:session:v1';
 
 function persist() {
-  if (state.mode === 'study') return;        // study is transient — never persisted
   if (state.mode === 'trap-watch') return;   // trap modes are transient — never persisted
   if (state.mode === 'trap-practice') return;// (both watch + practice)
   try {
@@ -250,8 +246,6 @@ async function refreshAnalysis() {
 // --- move handling (play mode) ---------------------------------------------
 
 async function onUserMove(orig, dest) {
-  // Study mode is a read-only walkthrough — ignore any board interaction.
-  if (state.mode === 'study') return;
   // trap-watch is view-only — ignore any board interaction.
   if (state.mode === 'trap-watch') return;
   // trap-practice has its own input path (onTrapMove, wired separately) — the
@@ -582,7 +576,7 @@ function cancelSetup() {
   exitSetupToPlay();
 }
 
-// --- opening trainer: detection + candidates -------------------------------
+// --- opening trainer: live name detection ----------------------------------
 
 // Fire-and-forget after any play-line change. Fully isolated: a slow/failed
 // opening call never blocks or breaks move handling or the eval render.
@@ -592,7 +586,6 @@ async function refreshOpening() {
   if (state.mode !== 'play') return;
   try {
     const body = { baseFen: state.baseFen, moves: state.moves.slice(0, state.cursor) };
-    if (openingFilter) body.q = openingFilter;
     const data = await postJSON('/api/opening', body);
     renderOpening(data);
   } catch (_) {
@@ -607,51 +600,13 @@ async function refreshOpeningThenTraps() {
   refreshTrapsAvailable(); // fire-and-forget; owns its own try/catch + token
 }
 
+// Passive readout only: name + ECO of the current line, or "—".
 function renderOpening(data) {
   const nameEl = byId('opening-name');
   if (data && data.current) {
     nameEl.textContent = `${data.current.name} (${data.current.eco})`;
   } else {
     nameEl.textContent = '—';
-  }
-
-  const list = byId('opening-candidates');
-  list.replaceChildren();
-  const items = (data && data.candidates) || [];
-  if (!items.length) {
-    const empty = document.createElement('div');
-    empty.className = 'cand-empty';
-    empty.textContent = openingFilter ? 'No openings match the filter.' : 'No named continuations from here.';
-    list.appendChild(empty);
-  } else {
-    for (const item of items) {
-      const btn = document.createElement('button');
-      const nm = document.createElement('span');
-      nm.textContent = item.name;            // textContent → escaped, no injection
-      const eco = document.createElement('span');
-      eco.className = 'cand-eco';
-      eco.textContent = item.eco;
-      btn.append(nm, eco);
-      btn.addEventListener('click', () => onCandidateClick(item));
-      list.appendChild(btn);
-    }
-  }
-
-  const trunc = byId('opening-truncated');
-  if (data && data.truncated) {
-    trunc.textContent = 'Showing the first 40 — filter or play a move to narrow.';
-    trunc.hidden = false;
-  } else {
-    trunc.hidden = true;
-  }
-}
-
-function onCandidateClick(item) {
-  if (state.mode === 'setup') return;            // inert during setup
-  if (state.mode === 'play') {
-    enterStudy(item);                            // snapshots the game
-  } else if (state.mode === 'study') {
-    loadStudyLine(item);                         // switch lines WITHOUT re-snapshot
   }
 }
 
@@ -1311,95 +1266,6 @@ function renderPracticeNote() {
   }
 }
 
-// --- study walkthrough -----------------------------------------------------
-
-function buildStudy(item) {
-  const uci = item.uci.split(/\s+/).filter(Boolean);
-  const pos = positionFromFen(INITIAL_FEN);
-  const fens = [fenOf(pos)];                      // step 0 = initial position
-  for (const u of uci) { pos.play(parseUci(u)); fens.push(fenOf(pos)); }
-  return { name: item.name, eco: item.eco, san: item.san, uci, fens, step: 0, max: uci.length };
-}
-
-function enterStudy(item) {
-  if (state.mode !== 'play') return;
-  studySnapshot = { baseFen: state.baseFen, moves: state.moves.slice(), cursor: state.cursor };
-  state.mode = 'study';
-  showStudyUI(true);
-  loadStudyLine(item);
-}
-
-function loadStudyLine(item) {
-  study = buildStudy(item);
-  byId('study-title').textContent = `Studying: ${item.name} (${item.eco})`;
-  goToStep(0);
-}
-
-function goToStep(k) {
-  if (!study) return;
-  study.step = Math.max(0, Math.min(k, study.max));
-  const fen = study.fens[study.step];
-  const pos = positionFromFen(fen);
-  ground.set({
-    fen: fen.split(' ')[0],
-    turnColor: pos.turn,
-    orientation: state.orientation,
-    lastMove: study.step > 0 ? lastMoveSquares(study.uci[study.step - 1]) : undefined,
-    movable: { free: false, color: undefined, dests: undefined },
-    draggable: { enabled: false },
-  });
-  renderStudyStep();
-}
-
-function renderStudyStep() {
-  byId('study-step').textContent = `${study.step} / ${study.max}`;
-  byId('study-move-san').textContent = study.step > 0 ? study.san[study.step - 1] : 'Start position';
-  byId('study-eval').textContent = '';
-  const commEl = byId('study-commentary');
-
-  const token = ++studyEvalToken;
-  const fen = study.fens[study.step];
-
-  // Lazy eval for the displayed step only.
-  postJSON('/api/analyze', { fen })
-    .then((d) => { if (token === studyEvalToken) byId('study-eval').textContent = formatEval(d.analysis); })
-    .catch(() => { /* eval is best-effort */ });
-
-  // Commentary: step 0 has none (commentary is keyed by position-after-a-move).
-  if (study.step === 0) {
-    commEl.textContent = 'The starting position of this line.';
-    return;
-  }
-  commEl.textContent = '…';
-  postJSON('/api/opening/commentary', { fen })
-    .then((c) => {
-      if (token !== studyEvalToken) return;
-      commEl.textContent = (c && c.text) ? c.text : 'No commentary yet for this move.';
-    })
-    .catch(() => { if (token === studyEvalToken) commEl.textContent = 'No commentary yet for this move.'; });
-}
-
-function exitStudy() {
-  const snap = studySnapshot || { baseFen: INITIAL_FEN, moves: [], cursor: 0 };
-  state.baseFen = snap.baseFen;
-  state.moves = snap.moves;
-  state.cursor = snap.cursor;
-  state.mode = 'play';
-  studySnapshot = null;
-  study = null;
-  showStudyUI(false);
-  ground.set({ highlight: { lastMove: true, check: true } });
-  syncBoard();
-  refreshAnalysis();
-  refreshOpeningThenTraps();
-  persist();
-}
-
-function showStudyUI(on) {
-  byId('study-bar').hidden = !on;
-  document.body.classList.toggle('study-mode', on);
-}
-
 // --- init ------------------------------------------------------------------
 
 function init() {
@@ -1458,17 +1324,6 @@ function init() {
   document.querySelectorAll('#palette [data-tool], #palette [data-piece]').forEach((b) => {
     b.addEventListener('click', () => setTool(b.dataset.tool || b.dataset.piece));
   });
-
-  // Opening filter + study controls
-  byId('opening-filter').addEventListener('input', (e) => {
-    openingFilter = e.target.value.trim();
-    refreshOpening();
-  });
-  byId('study-return').addEventListener('click', exitStudy);
-  byId('study-first').addEventListener('click', () => goToStep(0));
-  byId('study-prev').addEventListener('click', () => goToStep(study ? study.step - 1 : 0));
-  byId('study-next').addEventListener('click', () => goToStep(study ? study.step + 1 : 0));
-  byId('study-last').addEventListener('click', () => goToStep(study ? study.max : 0));
 
   // Traps browse filters
   byId('traps-name-filter').addEventListener('input', () => renderTraps());

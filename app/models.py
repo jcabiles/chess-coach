@@ -98,15 +98,6 @@ class OpeningRequest(BaseModel):
     moves: list[str] = Field(
         default_factory=list, description="UCI moves applied from baseFen, in order."
     )
-    q: str | None = Field(
-        default=None, description="Optional case-insensitive name filter for candidates."
-    )
-
-
-class CommentaryRequest(BaseModel):
-    """Body for ``POST /api/opening/commentary`` — a position to look up."""
-
-    fen: str = Field(description="Position (after a move) to fetch commentary for, in FEN.")
 
 
 class TrapsCheckRequest(BaseModel):
