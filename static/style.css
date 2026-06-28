@@ -15,6 +15,7 @@
   --q-inaccuracy: #f0d24b;
   --q-mistake: #f5a04b;
   --q-blunder: #f25b5b;
+  --q-book: #6ea8fe;
 }
 
 * { box-sizing: border-box; }
@@ -159,6 +160,8 @@ button.primary:hover { filter: brightness(1.08); }
 .q-inaccuracy { color: var(--q-inaccuracy); }
 .q-mistake { color: var(--q-mistake); }
 .q-blunder { color: var(--q-blunder); }
+/* Book move: calm blue, no "capitalize" surprises ("Book Move" is already cased). */
+.q-book { color: var(--q-book); }
 
 .best-move { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
 .pv {

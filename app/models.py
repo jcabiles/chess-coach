@@ -77,6 +77,13 @@ class MoveRequest(BaseModel):
     move: str = Field(
         description="Move in UCI; may include a promotion suffix, e.g. 'e7e8q'."
     )
+    useBook: bool = Field(
+        default=False,
+        description="When true, opt into the opening-book fast-path: if the move "
+        "stays in book the engine is skipped and the response has book=True with "
+        "analysis=None. Only the play-mode client sets this; default False keeps "
+        "every other caller (e.g. trap practice) on full analysis.",
+    )
 
 
 class AnalyzeRequest(BaseModel):
@@ -129,7 +136,23 @@ class MoveResponse(BaseModel):
     )
     analysis: Analysis | None = Field(
         default=None,
-        description="Analysis of the resulting position; None if illegal.",
+        description="Analysis of the resulting position; None if illegal, or None "
+        "when book=True (no engine ran).",
+    )
+    book: bool = Field(
+        default=False,
+        description="True when the book fast-path handled this move (engine skipped, "
+        "analysis is None). Always False unless the request set useBook.",
+    )
+    openingName: str | None = Field(
+        default=None,
+        description="Opening name of the resulting position; set only on book "
+        "responses when the position is a named line, else None.",
+    )
+    openingEco: str | None = Field(
+        default=None,
+        description="ECO code of the resulting position; set only on book responses "
+        "alongside openingName, else None.",
     )
 
 

@@ -28,6 +28,14 @@ def _epd_after(uci_str: str) -> str:
     return board.epd()
 
 
+def _fen_after(uci_str: str) -> str:
+    """Replay a space-separated UCI string and return the final FEN."""
+    board = chess.Board()
+    for m in uci_str.split():
+        board.push_uci(m)
+    return board.fen()
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -111,6 +119,44 @@ def test_identify_partial_match(idx):
     # The line after 6 plies is not in the fixture, but C50 Italian matches at ply 5
     assert result is not None
     assert result["eco"] == "C50"
+
+
+# ---------------------------------------------------------------------------
+# name_for_fen — resulting-position name lookup (drives the "Book Move" badge)
+# ---------------------------------------------------------------------------
+
+
+def test_name_for_fen_ruy_lopez(idx):
+    """name_for_fen returns the Ruy Lopez name for the Ruy position's FEN."""
+    result = openings.name_for_fen(_fen_after("e2e4 e7e5 g1f3 b8c6 f1b5"))
+    assert result is not None
+    assert result["eco"] == "C60"
+    assert "Ruy Lopez" in result["name"]
+
+
+def test_name_for_fen_agrees_with_identify(idx):
+    """For a named line, name_for_fen(resulting fen) matches identify(base, moves)."""
+    moves = ["e2e4", "e7e5", "g1f3", "b8c6", "f1b5"]
+    by_fen = openings.name_for_fen(_fen_after(" ".join(moves)))
+    by_identify = openings.identify(STARTING_FEN, moves)
+    assert by_fen == by_identify
+
+
+def test_name_for_fen_unknown_returns_none(idx):
+    """name_for_fen returns None for a position with no named opening."""
+    assert openings.name_for_fen(_fen_after("g1f3 g8f6 g2g3")) is None
+
+
+def test_name_for_fen_bad_fen_returns_none(idx):
+    """name_for_fen does not raise on an invalid FEN."""
+    assert openings.name_for_fen("not a valid fen") is None
+
+
+def test_name_for_fen_empty_index_returns_none():
+    """name_for_fen returns None when no data is loaded."""
+    openings.load("/nonexistent/path/for/openings/test")
+    assert openings.name_for_fen(_fen_after("e2e4 e7e5 g1f3 b8c6 f1b5")) is None
+    openings.load(FIXTURE_DIR)  # restore
 
 
 # ---------------------------------------------------------------------------

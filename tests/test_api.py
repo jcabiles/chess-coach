@@ -62,7 +62,10 @@ def test_move_illegal(client):
     # e2e5 is not a legal opening move.
     r = client.post("/api/move", json={"fen": START_FEN, "move": "e2e5"})
     assert r.status_code == 200
-    assert r.json() == {"legal": False, "fen": None, "lastMoveSan": None, "analysis": None}
+    assert r.json() == {
+        "legal": False, "fen": None, "lastMoveSan": None, "analysis": None,
+        "book": False, "openingName": None, "openingEco": None,
+    }
 
 
 def test_move_bad_uci(client):

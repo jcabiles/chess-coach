@@ -233,6 +233,46 @@ def get(trap_id: str) -> Optional[dict]:
     return traps_by_id.get(trap_id)
 
 
+def iter_mainline_ucis() -> list[list[str]]:
+    """Return each loaded variation's mainline as a FULL UCI line from the start.
+
+    A trap's ``mainLine`` begins AFTER its ``leadInSan`` prefix (e.g. mainLine[0]
+    may be ``b8c6``, illegal from the standard start), so the lead-in is converted
+    SAN -> UCI and PREPENDED to each variation's mainline UCIs. The result therefore
+    replays legally from the starting position and is suitable for folding into the
+    opening book (:mod:`app.book`).
+
+    Exception-safe: a malformed lead-in or variation is skipped (logged at debug),
+    never raised; returns ``[]`` if nothing is loaded. (This runs inside the app
+    lifespan — it must not crash startup.)
+    """
+    lines: list[list[str]] = []
+    for trap in traps_by_id.values():
+        # Convert the lead-in SAN prefix to UCI once per trap.
+        try:
+            board = chess.Board()
+            lead_ucis = [board.push_san(san).uci() for san in trap.get("leadInSan", [])]
+        except Exception as exc:
+            logger.debug(
+                "traps.iter_mainline_ucis: bad leadInSan for %r: %s",
+                trap.get("id"), exc,
+            )
+            continue
+
+        for variation in trap.get("variations", []):
+            try:
+                ucis = [ply["uci"] for ply in variation.get("mainLine", []) if ply.get("uci")]
+            except Exception as exc:
+                logger.debug(
+                    "traps.iter_mainline_ucis: bad variation in %r: %s",
+                    trap.get("id"), exc,
+                )
+                continue
+            if ucis:
+                lines.append(lead_ucis + ucis)
+    return lines
+
+
 def available(base_fen: str, uci_moves: list[str]) -> list[dict]:
     """Return summaries of traps whose start EPD matches the position after
     replaying *base_fen* + *uci_moves*.

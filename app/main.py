@@ -25,7 +25,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import openings, traps
+from app import book, openings, traps
 from app.analysis import classify, pov_score_to_white_cp
 from app.engine import AnalysisResult, EngineUnavailable, StockfishEngine
 from app.models import (
@@ -47,6 +47,7 @@ STATIC_DIR = BASE_DIR / "static"
 INDEX_HTML = STATIC_DIR / "index.html"
 OPENINGS_DIR = BASE_DIR / "data" / "openings"
 TRAPS_FILE = BASE_DIR / "data" / "traps.json"
+BOOK_FILE = BASE_DIR / "data" / "book.json"
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +68,18 @@ async def lifespan(app: FastAPI):
     # Opening name detection + traps (both degrade gracefully if files absent).
     openings.init(str(OPENINGS_DIR))
     traps.init(str(TRAPS_FILE))
+
+    # Opening-book fast-path: derive a set of repertoire positions from the lichess
+    # lines (scoped by data/book.json) + trap mainlines. Guarded so a malformed line
+    # can never crash startup — the API tests run this real lifespan via TestClient.
+    try:
+        book.init(
+            str(BOOK_FILE),
+            lines=openings.iter_lines(),
+            trap_ucis=traps.iter_mainline_ucis(),
+        )
+    except Exception as exc:  # pragma: no cover - defensive; book degrades to empty
+        logger.warning("Opening book unavailable (continuing without it): %s", exc)
 
     try:
         yield
@@ -189,6 +202,21 @@ async def make_move(req: MoveRequest, engine: StockfishEngine = Depends(get_engi
     fen_before = board.fen()
     board.push(move)
     fen_after = board.fen()
+
+    # Opening-book fast-path: when the client opts in (play mode) and the move stays
+    # in book, return instantly WITHOUT touching the engine. Legality is already
+    # checked above, so this only ever short-circuits a valid move.
+    if req.useBook and book.is_book_move(fen_before, req.move):
+        opening = openings.name_for_fen(fen_after)
+        return MoveResponse(
+            legal=True,
+            fen=fen_after,
+            lastMoveSan=last_move_san,
+            analysis=None,
+            book=True,
+            openingName=opening["name"] if opening else None,
+            openingEco=opening["eco"] if opening else None,
+        )
 
     try:
         before = await engine.analyze(fen_before)

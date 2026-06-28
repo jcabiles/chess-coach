@@ -234,8 +234,9 @@ async function refreshAnalysis() {
       const data = await postJSON('/api/move', {
         fen: fenOf(before.pos),
         move: state.moves[state.cursor - 1],
+        useBook: true,
       });
-      renderAnalysis(data.legal ? data.analysis : null);
+      applyMoveResponse(data);
     }
     setStatus('');
   } catch (err) {
@@ -265,7 +266,7 @@ async function onUserMove(orig, dest) {
   setStatus('Analyzing…');
   let data;
   try {
-    data = await postJSON('/api/move', { fen: fenBefore, move: uci });
+    data = await postJSON('/api/move', { fen: fenBefore, move: uci, useBook: true });
   } catch (err) {
     setStatus(err.message, true);
     syncBoard();
@@ -283,7 +284,7 @@ async function onUserMove(orig, dest) {
   state.cursor += 1;
 
   syncBoard();
-  renderAnalysis(data.analysis);
+  applyMoveResponse(data);
   setStatus('');
   persist();
   refreshOpeningThenTraps(); // fire-and-forget: opening then traps check, sequential
@@ -351,6 +352,27 @@ function renderAnalysis(a, opts = {}) {
 
   byId('best-move').textContent = (a && a.bestMoveSan) || '—';
   byId('pv').textContent = (a && a.pvSan && a.pvSan.length) ? a.pvSan.join(' ') : '—';
+}
+
+// Book move: the server skipped Stockfish (the line is known theory), so there is
+// no eval/best/PV — show a calm "Book Move" badge in the quality slot, naming the
+// line when the server identified one ("Book Move · Ruy Lopez").
+function renderBookMove(data) {
+  byId('eval').textContent = '—';
+  const qEl = byId('quality');
+  qEl.className = 'quality q-book';
+  const name = data && data.openingName;
+  qEl.textContent = name ? `Book Move · ${name}` : 'Book Move';
+  byId('best-move').textContent = '—';
+  byId('pv').textContent = '—';
+}
+
+// Render a play-mode /api/move response: a book move shows the badge (no engine
+// ran); otherwise the normal analysis panel. Check `book` BEFORE the legal/analysis
+// fallback so undo back into book restores the badge instead of a blank panel.
+function applyMoveResponse(data) {
+  if (data && data.book) { renderBookMove(data); return; }
+  renderAnalysis(data && data.legal ? data.analysis : null);
 }
 
 function setStatus(msg, isError = false) {

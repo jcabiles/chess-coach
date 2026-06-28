@@ -35,9 +35,13 @@ class OpeningsIndex:
 
     Attributes:
         name_by_epd: epd -> (eco, name). Deepest line wins on collision.
+        lines: UCI move-list of every parsed line, in load order. Retained so the
+            opening-book fast-path (``app.book``) can build its position set without
+            re-parsing the TSVs. Not used by name detection.
     """
 
     name_by_epd: dict[str, tuple[str, str]] = field(default_factory=dict)
+    lines: list[list[str]] = field(default_factory=list)
 
     @property
     def empty(self) -> bool:
@@ -193,6 +197,7 @@ def load(data_dir: Optional[str] = None) -> OpeningsIndex:
     # flicker to a shallower opening on a shared early position.
     name_by_epd: dict[str, tuple[str, str]] = {}
     depth_by_epd: dict[str, int] = {}
+    lines: list[list[str]] = []
     n_lines = 0
 
     for row in raw_rows:
@@ -202,12 +207,13 @@ def load(data_dir: Optional[str] = None) -> OpeningsIndex:
             logger.debug("openings: skipping row '%s': %s", row["name"], exc)
             continue
         n_lines += 1
+        lines.append(row["uci"].split())
         for depth, epd in enumerate(epds, start=1):
             if depth > depth_by_epd.get(epd, 0):
                 depth_by_epd[epd] = depth
                 name_by_epd[epd] = (row["eco"], row["name"])
 
-    _index = OpeningsIndex(name_by_epd=name_by_epd)
+    _index = OpeningsIndex(name_by_epd=name_by_epd, lines=lines)
     logger.info("openings: loaded %d lines from '%s'", n_lines, dir_path)
     return _index
 
@@ -215,6 +221,15 @@ def load(data_dir: Optional[str] = None) -> OpeningsIndex:
 def init(data_dir: Optional[str] = None) -> None:
     """Convenience wrapper — call load() at app startup."""
     load(data_dir)
+
+
+def iter_lines() -> list[list[str]]:
+    """Return the UCI move-list of every parsed line (in load order).
+
+    Consumed by :mod:`app.book` to build its repertoire position set without
+    re-parsing the TSVs. Returns an empty list if no data is loaded.
+    """
+    return _index.lines
 
 
 def identify(base_fen: str, uci_moves: list[str]) -> Optional[dict]:
@@ -251,6 +266,26 @@ def identify(base_fen: str, uci_moves: list[str]) -> Optional[dict]:
             best = {"eco": match[0], "name": match[1]}
 
     return best
+
+
+def name_for_fen(fen: str) -> Optional[dict]:
+    """Return ``{"eco", "name"}`` for the position in *fen*, or None.
+
+    Looks up the position's EPD in ``name_by_epd`` (the same index ``identify``
+    uses). Returns None on a bad FEN, an empty index, or an unnamed position.
+    Used by the opening-book fast-path to label the "Book Move" badge with the
+    line the player just entered (the resulting position's name).
+    """
+    if _index.empty:
+        return None
+    try:
+        epd = chess.Board(fen).epd()
+    except Exception:
+        return None
+    match = _index.name_by_epd.get(epd)
+    if match is None:
+        return None
+    return {"eco": match[0], "name": match[1]}
 
 
 
