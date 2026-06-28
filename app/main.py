@@ -25,7 +25,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import book, openings, traps
+from app import book, openings, repertoire, traps
 from app.analysis import classify, pov_score_to_white_cp
 from app.engine import AnalysisResult, EngineUnavailable, StockfishEngine
 from app.models import (
@@ -48,6 +48,7 @@ INDEX_HTML = STATIC_DIR / "index.html"
 OPENINGS_DIR = BASE_DIR / "data" / "openings"
 TRAPS_FILE = BASE_DIR / "data" / "traps.json"
 BOOK_FILE = BASE_DIR / "data" / "book.json"
+REPERTOIRE_FILE = BASE_DIR / "data" / "repertoire.json"
 
 
 # ---------------------------------------------------------------------------
@@ -65,18 +66,21 @@ async def lifespan(app: FastAPI):
     except EngineUnavailable as exc:
         logger.warning("Stockfish unavailable at startup: %s", exc)
 
-    # Opening name detection + traps (both degrade gracefully if files absent).
+    # Opening name detection + traps + repertoire (all degrade gracefully if absent).
     openings.init(str(OPENINGS_DIR))
     traps.init(str(TRAPS_FILE))
+    repertoire.init(str(REPERTOIRE_FILE))  # needs traps loaded first (trapId leaves)
 
     # Opening-book fast-path: derive a set of repertoire positions from the lichess
-    # lines (scoped by data/book.json) + trap mainlines. Guarded so a malformed line
-    # can never crash startup — the API tests run this real lifespan via TestClient.
+    # lines (scoped by data/book.json) + trap mainlines + curated repertoire lines.
+    # Guarded so a malformed line can never crash startup — the API tests run this real
+    # lifespan via TestClient. Repertoire lines are full-from-start lines that must
+    # bypass the book.json firstMoves filter, so they ride the trap_ucis slot.
     try:
         book.init(
             str(BOOK_FILE),
             lines=openings.iter_lines(),
-            trap_ucis=traps.iter_mainline_ucis(),
+            trap_ucis=list(traps.iter_mainline_ucis()) + list(repertoire.iter_lines()),
         )
     except Exception as exc:  # pragma: no cover - defensive; book degrades to empty
         logger.warning("Opening book unavailable (continuing without it): %s", exc)
@@ -114,12 +118,14 @@ def _build_analysis(result: AnalysisResult, quality: str | None = None) -> Analy
 
     pv_san = result.pv_san
     best_move_san = pv_san[0] if pv_san else None
+    best_move_uci = result.pv[0].uci() if result.pv else None
 
     return Analysis(
         evalCp=eval_cp,
         mate=mate,
         evalWhitePov=pov_score_to_white_cp(result.score),
         bestMoveSan=best_move_san,
+        bestMoveUci=best_move_uci,
         pvSan=pv_san,
         quality=quality,
     )
@@ -250,6 +256,19 @@ async def opening_info(req: OpeningRequest):
     opening matches or when data is absent.
     """
     return {"current": openings.identify(req.baseFen, req.moves)}
+
+
+# ---------------------------------------------------------------------------
+# Repertoire trainer (additive; degrade gracefully when data is absent)
+# ---------------------------------------------------------------------------
+@app.get("/api/repertoire")
+async def get_repertoire():
+    """Return the curated repertoire: per-color move trees + grouped catalog.
+
+    Always returns a well-formed body; empty (roots present, no children, empty
+    catalog) when data is absent. Never 500.
+    """
+    return {"tree": repertoire.tree()}
 
 
 # ---------------------------------------------------------------------------

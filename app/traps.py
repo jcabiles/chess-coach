@@ -273,6 +273,40 @@ def iter_mainline_ucis() -> list[list[str]]:
     return lines
 
 
+def mainline_ucis_for(trap_id: str, variation: int = 0) -> list[str]:
+    """Return ONE trap variation's mainline as a full UCI line from the start.
+
+    Resolves *trap_id* via :func:`get`, converts its ``leadInSan`` SAN prefix to UCI,
+    and **prepends** it to ``variations[variation].mainLine[].uci`` — the same per-line
+    build :func:`iter_mainline_ucis` does internally, but for a single id+variation
+    (which :func:`iter_mainline_ucis` cannot select). Used by the repertoire trainer's
+    trap-leaf references so it never re-implements trap internals.
+
+    Exception-safe: unknown id, out-of-range variation, or malformed lead-in/variation
+    returns ``[]`` — never raises.
+    """
+    trap = traps_by_id.get(trap_id)
+    if trap is None:
+        return []
+    variations = trap.get("variations", [])
+    if not isinstance(variations, list) or not (0 <= variation < len(variations)):
+        return []
+    try:
+        board = chess.Board()
+        lead_ucis = [board.push_san(san).uci() for san in trap.get("leadInSan", [])]
+        ucis = [
+            ply["uci"]
+            for ply in variations[variation].get("mainLine", [])
+            if ply.get("uci")
+        ]
+    except Exception as exc:
+        logger.debug(
+            "traps.mainline_ucis_for: bad data for %r v%d: %s", trap_id, variation, exc
+        )
+        return []
+    return lead_ucis + ucis if ucis else []
+
+
 def available(base_fen: str, uci_moves: list[str]) -> list[dict]:
     """Return summaries of traps whose start EPD matches the position after
     replaying *base_fen* + *uci_moves*.

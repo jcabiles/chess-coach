@@ -110,6 +110,22 @@
           <button id="trap-show-refutation" title="Show what the opponent should have played">Show refutation</button>
         </div>
       </div>
+
+      <!-- Repertoire practice bar — shown only in rep-practice mode -->
+      <div id="rep-bar" class="rep-bar" hidden>
+        <div class="rep-header">
+          <span id="rep-title" class="rep-title">Practice</span>
+          <button id="rep-return">Return to my game</button>
+        </div>
+        <div id="rep-move" class="rep-move"></div>
+        <div id="rep-note" class="rep-note"></div>
+        <div id="rep-feedback" class="rep-feedback" hidden></div>
+        <div class="rep-controls">
+          <button id="rep-back" title="Undo your last move and the opponent's reply">&#9664; Take back</button>
+          <button id="rep-reveal" title="Play the prepared move for me">Reveal move</button>
+          <button id="rep-restart" title="Restart this line from the beginning">&#8635; Restart</button>
+        </div>
+      </div>
     </section>
 
     <aside class="panel">
@@ -133,6 +149,11 @@
       <div class="opening-block">
         <div class="eval-label">Opening</div>
         <div id="opening-name" class="opening-name">—</div>
+      </div>
+
+      <div id="repertoire-section" class="repertoire-section" hidden>
+        <div class="eval-label">My Repertoire</div>
+        <div id="repertoire-tree" class="repertoire-tree"></div>
       </div>
 
       <div id="traps-section" class="traps-section">

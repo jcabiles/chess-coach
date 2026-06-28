@@ -298,6 +298,113 @@ body.trap-practice-mode #fen-error { display: none; }
   .trap-bar { width: 92vw; }
 }
 
+/* ---- Repertoire trainer ---- */
+/* In rep-practice the play + setup controls are hidden (the board is driven by
+   the practice loop), mirroring the trap modes. */
+body.rep-mode #undo,
+body.rep-mode #redo,
+body.rep-mode #reset,
+body.rep-mode #setup-toggle,
+body.rep-mode .fen-row,
+body.rep-mode #fen-error { display: none; }
+
+.repertoire-section { display: flex; flex-direction: column; gap: 0.4rem; }
+.repertoire-section[hidden] { display: none; }
+.repertoire-tree { display: flex; flex-direction: column; gap: 0.25rem; max-height: 260px; overflow-y: auto; }
+
+.rep-color { display: flex; flex-direction: column; }
+.rep-color-hdr {
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  padding: 0.3rem 0.2rem;
+  cursor: pointer;
+}
+.rep-color-hdr:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rep-color-body { display: flex; flex-direction: column; gap: 0.15rem; padding-left: 0.4rem; }
+.rep-color-body.collapsed { display: none; }
+
+.rep-opening { display: flex; flex-direction: column; }
+.rep-opening-hdr { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+.rep-opening-name {
+  flex: 1;
+  text-align: left;
+  font-size: 0.83rem;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 0.25rem 0.2rem;
+  cursor: pointer;
+}
+.rep-opening-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rep-opening-body { display: flex; flex-direction: column; gap: 0.1rem; padding-left: 0.5rem; }
+.rep-opening-body.collapsed { display: none; }
+
+.rep-practice-btn {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  background: var(--accent);
+  color: #10243f;
+  font-weight: 700;
+  border-color: var(--accent);
+  min-width: unset;
+}
+.rep-practice-btn:hover { filter: brightness(1.08); }
+
+.rep-line { display: flex; align-items: center; gap: 0.3rem; }
+.rep-line-jump {
+  flex: 1;
+  text-align: left;
+  font-size: 0.82rem;
+  background: #222;
+  border: 1px solid #555;
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+.rep-line-jump:hover { border-color: var(--accent); }
+.rep-line-jump:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rep-line-jump.is-trap { color: var(--q-book); }
+.rep-line-practice {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.4rem;
+  min-width: unset;
+  background: transparent;
+  border-color: #555;
+  color: var(--muted);
+}
+.rep-line-practice:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---- Repertoire practice bar ---- */
+.rep-bar {
+  width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  background: var(--panel-bg);
+  border-radius: 10px;
+  padding: 0.8rem 0.9rem;
+}
+.rep-bar[hidden] { display: none; }
+.rep-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.rep-title { font-weight: 600; }
+.rep-move { font-size: 1.0rem; font-weight: 600; }
+.rep-note { font-size: 0.9rem; line-height: 1.5; color: var(--text); white-space: pre-line; }
+.rep-feedback { font-size: 0.9rem; font-weight: 600; padding: 0.3rem 0; }
+.rep-feedback[hidden] { display: none; }
+.rep-feedback.feedback-good { color: var(--q-best); }
+.rep-feedback.feedback-bad { color: var(--error); }
+.rep-controls { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+@media (max-width: 560px) {
+  .rep-bar { width: 92vw; }
+}
+
 /* ---- Promotion picker overlay ---- */
 .promo-overlay {
   position: fixed;

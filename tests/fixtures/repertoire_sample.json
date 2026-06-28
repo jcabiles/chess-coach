@@ -1,0 +1,40 @@
+{
+  "_comment": "Fixture for tests/test_repertoire.py. Exercises: SAN lines, an opponent branch (e5 vs c5 after 1.e4), a your-turn CONFLICT that must be dropped (wbad: White's 3rd move d4 vs w-italian's Nf3), an ILLEGAL SAN line that must be dropped (willegal), and a black line. Trap-leaf resolution is tested against the shipped data instead (needs traps loaded).",
+  "lines": [
+    {
+      "id": "w-italian",
+      "name": "Italian",
+      "parentOpening": "Italian Game",
+      "yourColor": "white",
+      "line": ["e4", "e5", "Nf3", "Nc6", "Bc4"]
+    },
+    {
+      "id": "w-sicilian",
+      "name": "Open Sicilian",
+      "parentOpening": "Sicilian Defense",
+      "yourColor": "white",
+      "line": ["e4", "c5", "Nf3", "d6", "d4"]
+    },
+    {
+      "id": "wbad",
+      "name": "Conflicting line",
+      "parentOpening": "Open Games",
+      "yourColor": "white",
+      "line": ["e4", "e5", "d4"]
+    },
+    {
+      "id": "willegal",
+      "name": "Illegal line",
+      "parentOpening": "Broken",
+      "yourColor": "white",
+      "line": ["e4", "e4"]
+    },
+    {
+      "id": "b-french",
+      "name": "French Defense",
+      "parentOpening": "French Defense",
+      "yourColor": "black",
+      "line": ["e4", "e6", "d4", "d5"]
+    }
+  ]
+}

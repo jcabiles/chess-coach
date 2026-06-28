@@ -40,6 +40,11 @@ class Analysis(BaseModel):
         description="Engine's best move for the resulting position, in SAN; None "
         "if unavailable (e.g. terminal position)."
     )
+    bestMoveUci: str | None = Field(
+        default=None,
+        description="Engine's best move in UCI; None if unavailable. Lets the practice "
+        "client auto-play the engine opponent after prep ends.",
+    )
     pvSan: list[str] = Field(
         default_factory=list,
         description="Principal variation (engine's top line) for the resulting "

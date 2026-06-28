@@ -1,0 +1,97 @@
+{
+  "_comment": "Curated repertoire for the Repertoire Trainer (see docs/ai-dlc/specs/repertoire-trainer.md). Each entry is one named line. A line has either a SAN 'line' (replayed from the standard start by app/repertoire.py, which validates legality and derives UCIs) OR a 'trapId' (+ optional 'variation') that reuses a line from data/traps.json. 'yourColor' is the side you play; the loader groups by color -> parentOpening -> line and builds a per-color move tree for practice. Invariant: at a node where it is YOUR turn, exactly one prepared move; opponent-turn nodes may branch (variety). Grow this file by adding entries.",
+  "lines": [
+    {
+      "id": "italian-giuoco-pianissimo",
+      "name": "Giuoco Pianissimo",
+      "parentOpening": "Italian Game",
+      "yourColor": "white",
+      "line": ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "c3", "Nf6", "d3"],
+      "note": "Quiet build-up: c3/d3, slow maneuvering middlegame."
+    },
+    {
+      "id": "sicilian-najdorf-white",
+      "name": "Najdorf Variation",
+      "parentOpening": "Sicilian Defense, Open (White)",
+      "yourColor": "white",
+      "line": ["e4", "c5", "Nf3", "d6", "d4", "cxd4", "Nxd4", "Nf6", "Nc3", "a6"],
+      "note": "Open Sicilian vs the Najdorf (5...a6)."
+    },
+    {
+      "id": "sicilian-dragon-white",
+      "name": "Dragon Variation",
+      "parentOpening": "Sicilian Defense, Open (White)",
+      "yourColor": "white",
+      "line": ["e4", "c5", "Nf3", "d6", "d4", "cxd4", "Nxd4", "Nf6", "Nc3", "g6"],
+      "note": "Open Sicilian vs the Dragon (5...g6)."
+    },
+    {
+      "id": "sicilian-classical-white",
+      "name": "Classical Variation",
+      "parentOpening": "Sicilian Defense, Open (White)",
+      "yourColor": "white",
+      "line": ["e4", "c5", "Nf3", "Nc6", "d4", "cxd4", "Nxd4", "Nf6", "Nc3"],
+      "note": "Open Sicilian vs 2...Nc6 (Classical)."
+    },
+    {
+      "id": "scandinavian-main-white",
+      "name": "Main Line (3...Qa5)",
+      "parentOpening": "Scandinavian Defense",
+      "yourColor": "white",
+      "line": ["e4", "d5", "exd5", "Qxd5", "Nc3", "Qa5", "d4", "Nf6", "Nf3"],
+      "note": "Accept and develop with tempo on the queen."
+    },
+    {
+      "id": "sicilian-najdorf-black",
+      "name": "Najdorf Variation",
+      "parentOpening": "Sicilian Defense (as Black)",
+      "yourColor": "black",
+      "line": ["e4", "c5", "Nf3", "d6", "d4", "cxd4", "Nxd4", "Nf6", "Nc3", "a6"],
+      "note": "Your Sicilian as Black: the Najdorf."
+    },
+    {
+      "id": "kings-indian-black",
+      "name": "King's Indian Defense",
+      "parentOpening": "Indian Defense (as Black)",
+      "yourColor": "black",
+      "line": ["d4", "Nf6", "c4", "g6", "Nc3", "Bg7", "e4", "d6", "Nf3", "O-O"],
+      "note": "Your Indian vs 1.d4: the King's Indian."
+    },
+    {
+      "id": "trap-fried-liver",
+      "name": "Fried Liver Attack",
+      "parentOpening": "Italian Game, Two Knights Defense",
+      "yourColor": "white",
+      "trapId": "fried-liver-attack",
+      "variation": 0,
+      "note": "Trap leaf: the Two Knights sac on f7."
+    },
+    {
+      "id": "trap-legal-mate",
+      "name": "Legal Trap",
+      "parentOpening": "Philidor Defense",
+      "yourColor": "white",
+      "trapId": "legal-mate",
+      "variation": 0,
+      "note": "Trap leaf: the classic queen sac mate."
+    },
+    {
+      "id": "trap-petrov",
+      "name": "Petrov Queen Trap",
+      "parentOpening": "Petrov (Russian) Defense",
+      "yourColor": "white",
+      "trapId": "petrov-queen-trap",
+      "variation": 0,
+      "note": "Trap leaf: Nxc6 forking the queen."
+    },
+    {
+      "id": "trap-siberian",
+      "name": "Siberian Trap",
+      "parentOpening": "Sicilian, Smith-Morra (as Black)",
+      "yourColor": "black",
+      "trapId": "siberian-trap",
+      "variation": 0,
+      "note": "Trap leaf (as Black): ...Qxh2 against the Smith-Morra."
+    }
+  ]
+}
