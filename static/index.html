@@ -9,6 +9,11 @@
   <meta name="color-scheme" content="dark light" />
   <title>Stockfish Analysis Board</title>
 
+  <!-- Inter + JetBrains Mono via Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+
   <!--
     TODO(vendor): these load chessground + chessops from a CDN so the app runs
     immediately. To go fully offline, download them into static/vendor/ and
@@ -19,6 +24,15 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.brown.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.cburnett.css" />
   <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/panel.css" />
+  <link rel="stylesheet" href="/static/feedback.css" />
+  <link rel="stylesheet" href="/static/movelist.css" />
+
+  <!-- Lucide icons via esm.sh — replaces HTML-entity glyphs on nav buttons -->
+  <script type="module">
+    import { createIcons, Undo2, Redo2, FlipHorizontal2, RotateCcw, Settings2 } from 'https://esm.sh/lucide@1.22.0';
+    createIcons({ icons: { Undo2, Redo2, FlipHorizontal2, RotateCcw, Settings2 } });
+  </script>
 </head>
 <body>
   <header>
@@ -28,14 +42,17 @@
 
   <main>
     <section class="board-col">
-      <div id="board"></div>
+      <div class="board-wrap">
+        <div id="eval-bar"></div>
+        <div id="board"></div>
+      </div>
 
       <div class="controls">
-        <button id="undo" title="Step back">&#8592; Undo</button>
-        <button id="redo" title="Step forward">Redo &#8594;</button>
-        <button id="flip" title="Flip board">&#8635; Flip</button>
-        <button id="reset" title="Back to start">Reset</button>
-        <button id="setup-toggle" title="Set up a position freely">&#9874; Set up position</button>
+        <button id="undo" title="Step back"><i data-lucide="undo-2"></i> Undo</button>
+        <button id="redo" title="Step forward"><i data-lucide="redo-2"></i> Redo</button>
+        <button id="flip" title="Flip board"><i data-lucide="flip-horizontal-2"></i> Flip</button>
+        <button id="reset" title="Back to start"><i data-lucide="rotate-ccw"></i> Reset</button>
+        <button id="setup-toggle" title="Set up a position freely"><i data-lucide="settings-2"></i> Set up position</button>
       </div>
 
       <div class="fen-row">
@@ -123,75 +140,106 @@
         <div class="rep-controls">
           <button id="rep-back" title="Undo your last move and the opponent's reply">&#9664; Take back</button>
           <button id="rep-reveal" title="Play the prepared move for me">Reveal move</button>
-          <button id="rep-restart" title="Restart this line from the beginning">&#8635; Restart</button>
+          <button id="rep-restart" title="Restart this line from the beginning"><i data-lucide="rotate-ccw"></i> Restart</button>
         </div>
       </div>
     </section>
 
     <aside class="panel">
-      <div class="eval-block">
-        <div class="eval-label">Evaluation</div>
-        <div id="eval" class="eval">—</div>
+      <!-- Tab bar -->
+      <div id="panel-tabs" role="tablist">
+        <button id="tab-btn-analysis" role="tab" data-tab="analysis" aria-selected="true" aria-controls="tab-analysis">Analysis</button>
+        <button id="tab-btn-opening" role="tab" data-tab="opening" aria-selected="false" aria-controls="tab-opening">Opening</button>
+        <button id="tab-btn-traps" role="tab" data-tab="traps" aria-selected="false" aria-controls="tab-traps">Traps</button>
+        <button id="tab-btn-repertoire" role="tab" data-tab="repertoire" aria-selected="false" aria-controls="tab-repertoire">Repertoire</button>
       </div>
 
-      <div class="quality-block">
-        <div class="eval-label">Last move</div>
-        <div id="quality" class="quality">—</div>
-      </div>
+      <!-- Analysis tab -->
+      <div id="tab-analysis" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-btn-analysis">
+        <div id="analysis-status" class="analysis-status"></div>
 
-      <div class="best-block">
-        <div class="eval-label">Best move</div>
-        <div id="best-move" class="best-move">—</div>
-        <div class="eval-label">Best line</div>
-        <div id="pv" class="pv">—</div>
-      </div>
-
-      <div class="opening-block">
-        <div class="eval-label">Opening</div>
-        <div id="opening-name" class="opening-name">—</div>
-      </div>
-
-      <div id="repertoire-section" class="repertoire-section" hidden>
-        <div class="eval-label">My Repertoire</div>
-        <div id="repertoire-tree" class="repertoire-tree"></div>
-      </div>
-
-      <div id="traps-section" class="traps-section">
-        <div class="eval-label">Opening Traps</div>
-        <div class="traps-filters">
-          <input id="traps-name-filter" type="text" placeholder="Filter by name…" />
-          <select id="traps-color-filter">
-            <option value="">All colors</option>
-            <option value="white">White</option>
-            <option value="black">Black</option>
-          </select>
+        <div class="eval-block">
+          <div class="eval-label">Evaluation</div>
+          <div id="eval" class="eval">—</div>
         </div>
-        <div id="traps-list" class="traps-list"></div>
+
+        <div class="quality-block">
+          <div class="eval-label">Last move</div>
+          <div id="quality" class="quality">—</div>
+        </div>
+
+        <div class="best-block">
+          <div class="eval-label">Best move</div>
+          <div id="best-move" class="best-move">—</div>
+          <div class="eval-label">Best line</div>
+          <div id="pv" class="pv">—</div>
+        </div>
+
+        <div class="movelist-block">
+          <div class="eval-label">Moves</div>
+          <div id="move-list" class="move-list"></div>
+        </div>
+
+        <div id="status" class="status"></div>
+
+        <!-- Live trap-available nudge chip (play mode only) -->
+        <div id="trap-chip" class="trap-chip" hidden>
+          <span id="trap-chip-text" class="trap-chip-text"></span>
+          <button id="trap-chip-drill" class="trap-chip-drill">Drill it</button>
+          <button id="trap-chip-dismiss" class="trap-chip-dismiss" title="Dismiss">&#10005;</button>
+        </div>
       </div>
 
-      <!-- Live trap-available nudge chip (play mode only) -->
-      <div id="trap-chip" class="trap-chip" hidden>
-        <span id="trap-chip-text" class="trap-chip-text"></span>
-        <button id="trap-chip-drill" class="trap-chip-drill">Drill it</button>
-        <button id="trap-chip-dismiss" class="trap-chip-dismiss" title="Dismiss">&#10005;</button>
+      <!-- Opening tab -->
+      <div id="tab-opening" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-opening">
+        <div class="opening-block">
+          <div class="eval-label">Opening</div>
+          <div id="opening-name" class="opening-name">—</div>
+        </div>
       </div>
 
-      <div id="status" class="status"></div>
+      <!-- Traps tab -->
+      <div id="tab-traps" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-traps">
+        <div id="traps-section" class="traps-section">
+          <div class="eval-label">Opening Traps</div>
+          <div class="traps-filters">
+            <input id="traps-name-filter" type="text" placeholder="Filter by name…" />
+            <select id="traps-color-filter">
+              <option value="">All colors</option>
+              <option value="white">White</option>
+              <option value="black">Black</option>
+            </select>
+          </div>
+          <div id="traps-list" class="traps-list"></div>
+        </div>
+      </div>
+
+      <!-- Repertoire tab -->
+      <div id="tab-repertoire" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-repertoire">
+        <div id="repertoire-section" class="repertoire-section" hidden>
+          <div class="eval-label">My Repertoire</div>
+          <div id="repertoire-tree" class="repertoire-tree"></div>
+        </div>
+        <div class="empty-state" id="repertoire-empty-state">
+          <p>No repertoire loaded yet.</p>
+        </div>
+      </div>
     </aside>
   </main>
 
-  <!-- Promotion picker overlay -->
-  <div id="promo-overlay" class="promo-overlay" hidden>
-    <div class="promo-box">
-      <div class="promo-title">Promote to:</div>
-      <div class="promo-choices">
-        <button data-piece="q">&#9819; Queen</button>
-        <button data-piece="r">&#9820; Rook</button>
-        <button data-piece="b">&#9821; Bishop</button>
-        <button data-piece="n">&#9822; Knight</button>
-      </div>
+  <!-- Toasts container (fixed, top-right) -->
+  <div id="toasts"></div>
+
+  <!-- Promotion picker — native dialog replaces the old overlay div -->
+  <dialog id="promo-dialog" class="promo-dialog">
+    <div class="promo-title">Promote to:</div>
+    <div class="promo-choices">
+      <button data-piece="q">&#9819; Queen</button>
+      <button data-piece="r">&#9820; Rook</button>
+      <button data-piece="b">&#9821; Bishop</button>
+      <button data-piece="n">&#9822; Knight</button>
     </div>
-  </div>
+  </dialog>
 
   <script type="module" src="/static/app.js"></script>
 </body>

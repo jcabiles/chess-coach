@@ -1,0 +1,108 @@
+/* panel.css — Eval bar fill + panel-specific overrides */
+
+/* ============================================================
+   Eval bar — vertical White/Black advantage indicator.
+   White = bottom of the bar; fill grows upward with White's lead.
+   The bar mount (#eval-bar) is sized and bordered in style.css;
+   panel.css owns only the fill layer and transition.
+   ============================================================ */
+
+#eval-bar {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Black half: fills entire bar (dark = black) */
+#eval-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: oklch(18% 0.01 248); /* near-black, matches board dark theme */
+}
+
+/* White fill: grows from the bottom according to --fill (0–100%) */
+#eval-bar::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--fill, 50%);
+  background: oklch(94% 0.004 248); /* near-white with cool tint */
+  transition: height var(--motion-base) var(--ease-out);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+}
+
+/* Reduced-motion: instant snap (global rule covers this, but be explicit) */
+@media (prefers-reduced-motion: reduce) {
+  #eval-bar::after {
+    transition: none;
+  }
+}
+
+/* ============================================================
+   Quality display — icon + text inline, aligned.
+   ============================================================ */
+
+.quality {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+}
+
+/* The icon wrapper: vertically centered, inherits color */
+.quality-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  /* Size matches the font-size of .quality (1.15rem) */
+  width: 1.15em;
+  height: 1.15em;
+}
+
+.quality-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* The text part — capitalized (inherited from .quality in style.css) */
+.quality-label {
+  text-transform: capitalize;
+}
+
+/* ============================================================
+   PV line — numbered move tokens.
+   ============================================================ */
+
+/* Move number prefixes (e.g. "1. ", "15… ") */
+.pv-num {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+/* Each individual SAN move token */
+.pv-move {
+  color: var(--text-secondary);
+  cursor: default;
+}
+
+.pv-move:hover {
+  color: var(--text);
+}
+
+/* Depth caption appended after the PV */
+.pv-depth {
+  color: var(--muted);
+  font-size: 0.78em;
+  font-variant-numeric: tabular-nums;
+  margin-left: 0.25em;
+}
+
+/* ============================================================
+   Best move — light polish
+   ============================================================ */
+
+.best-move {
+  color: var(--accent);
+}
