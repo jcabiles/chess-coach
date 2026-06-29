@@ -1,0 +1,167 @@
+/* feedback.css — Toast notifications + analysis loading indicator.
+   Uses design tokens from style.css (:root). Never redefines .empty-state.
+   ------------------------------------------------------------------ */
+
+/* ==========================================================================
+   Toast container
+   The #toasts element is positioned fixed by the browser (top-right corner).
+   We only size + space it here — positioning lives in style.css (Phase 1).
+   ========================================================================== */
+
+#toasts {
+  position: fixed;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  pointer-events: none; /* let clicks fall through when no toasts present */
+}
+
+/* ==========================================================================
+   Individual toast item
+   ========================================================================== */
+
+.toast {
+  /* Layout */
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  min-width: 200px;
+  max-width: 320px;
+
+  /* Surface + border */
+  background: var(--surface-overlay);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent); /* info accent by default */
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+
+  /* Typography */
+  color: var(--text);
+  font-size: 0.85rem;
+  line-height: 1.4;
+
+  /* Pointer events re-enabled for individual toasts */
+  pointer-events: auto;
+  cursor: default;
+
+  /* Slide-in from the right.
+     Initial state: pushed off-screen to the right + transparent.
+     .toast--visible drives it into place.
+     Reduced-motion: style.css already sets transition-duration → 0.01ms globally
+     via the prefers-reduced-motion media query, so no extra work needed here. */
+  opacity: 0;
+  transform: translateX(calc(100% + var(--space-4)));
+  transition:
+    opacity var(--motion-base) var(--ease-out),
+    transform var(--motion-base) var(--ease-out);
+  will-change: opacity, transform;
+}
+
+/* Slide in when the class is added (after one rAF tick). */
+.toast--visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Slide out: remove .toast--visible — CSS plays the reverse automatically. */
+
+/* ---- Kind variants ---- */
+
+.toast--success {
+  border-left-color: var(--q-best); /* green */
+}
+
+.toast--error {
+  border-left-color: var(--error); /* red */
+}
+
+/* ---- Toast message ---- */
+
+.toast__msg {
+  flex: 1;
+}
+
+/* ---- Close button ---- */
+
+.toast__close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0 var(--space-1);
+  color: var(--text-secondary);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color var(--motion-fast) var(--ease-out);
+}
+
+.toast__close:hover,
+.toast__close:focus-visible {
+  color: var(--text);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ==========================================================================
+   Analysis loading indicator
+   Lives in #analysis-status (inside the analysis tab panel).
+   Hidden by default (empty); shown while analysis:start is active.
+   ========================================================================== */
+
+.analysis-status {
+  /* Hidden when empty — takes no space. */
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+/* Revealed by JS when analysis is running. */
+.analysis-status--active {
+  display: flex;
+}
+
+/* ---- Spinner ---- */
+
+.analysis-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spinner-rotate 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+.analysis-spinner__label {
+  color: var(--text-secondary);
+}
+
+@keyframes spinner-rotate {
+  to { transform: rotate(360deg); }
+}
+
+/* Reduced-motion: swap the spinning animation for a simple pulse.
+   (style.css sets transition-duration → 0.01ms globally, but @keyframes
+   animations need their own override here.) */
+@media (prefers-reduced-motion: reduce) {
+  .analysis-spinner {
+    animation: spinner-pulse 1.5s ease-in-out infinite;
+    border-color: var(--accent);
+    border-top-color: transparent;
+  }
+
+  @keyframes spinner-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+  }
+}

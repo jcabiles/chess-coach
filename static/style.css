@@ -1,84 +1,299 @@
+/* ============================================================
+   Chess Training — Main Stylesheet
+   Design system: dark-first, layered OKLCH surfaces, electric
+   azure accent, Inter UI + JetBrains Mono for code/notation.
+   ============================================================ */
+
+/* ---- Design tokens ---- */
 :root {
   /* Opt into native dark handling so the browser won't force-darken/invert
      images (e.g. Chrome auto-dark flipping black pieces to white). */
   color-scheme: dark light;
 
-  --bg: #2b2b2b;
-  --panel-bg: #383838;
-  --text: #f0f0f0;
-  --muted: #aaa;
-  --accent: #6ea8fe;
-  --error: #ff7b7b;
+  /* ---- Surface elevation (OKLCH + hex fallback) ---- */
+  /* Base — page background, near-black with a cool tint */
+  --surface-base:    oklch(14% 0.012 248); /* #151b22 */
+  /* Panel — card/aside background, one step up */
+  --surface-panel:   oklch(18% 0.013 248); /* #1d2430 */
+  /* Raised — inputs, code blocks, secondary cards */
+  --surface-raised:  oklch(22% 0.014 248); /* #242d3a */
+  /* Overlay — dialogs, tooltips, dropdowns */
+  --surface-overlay: oklch(26% 0.015 248); /* #2c3647 */
+  /* Border default */
+  --border:          oklch(32% 0.016 248); /* #38455a */
+  /* Border subtle — hairlines */
+  --border-subtle:   oklch(25% 0.013 248); /* #2a3342 */
 
-  --q-best: #5bd75b;
-  --q-good: #9ad75b;
-  --q-inaccuracy: #f0d24b;
-  --q-mistake: #f5a04b;
-  --q-blunder: #f25b5b;
-  --q-book: #6ea8fe;
+  /* Legacy aliases (keep the old var names pointing to new tokens) */
+  --bg:       var(--surface-base);
+  --panel-bg: var(--surface-panel);
+
+  /* ---- Text hierarchy ---- */
+  /* Primary — nearly white, cool tint, ≥7:1 on surface-base */
+  --text:         oklch(94% 0.008 248); /* #e8edf4 */
+  /* Secondary — label text, slightly dimmed, ≥4.5:1 on surface-panel */
+  --text-secondary: oklch(74% 0.012 248); /* #a8b4c8 */
+  /* Muted — very dim metadata, ≥4.5:1 on surface-raised */
+  --muted:        oklch(63% 0.014 248); /* ≥4.5:1 on every surface incl. raised */
+
+  /* ---- Accent — electric azure ---- */
+  --accent:        oklch(72% 0.19 231);  /* #38bdf8  sky-400-ish */
+  --accent-dim:    oklch(30% 0.09 231);  /* #0c2a40 — subtle tinted bg */
+  --accent-on:     oklch(13% 0.03 248);  /* near-black text on accent bg */
+
+  /* ---- Semantic error ---- */
+  --error: oklch(68% 0.18 22); /* #f87171 */
+
+  /* ---- Move quality colors (retuned for dark surfaces, ≥4.5:1) ---- */
+  --q-best:       oklch(74% 0.16 145); /* #4ade80 */
+  --q-good:       oklch(78% 0.16 130); /* #86efac */
+  --q-inaccuracy: oklch(82% 0.16 85);  /* #fde047 */
+  --q-mistake:    oklch(75% 0.16 55);  /* #fb923c */
+  --q-blunder:    oklch(65% 0.18 22);  /* #f87171 */
+  --q-book:       var(--accent);
+
+  /* ---- Spacing scale (4px base) ---- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+
+  /* ---- Radii ---- */
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  14px;
+
+  /* ---- Elevation shadows ---- */
+  --shadow-sm:  0 1px 3px oklch(0% 0 0 / 0.3), 0 1px 2px oklch(0% 0 0 / 0.2);
+  --shadow-md:  0 4px 12px oklch(0% 0 0 / 0.35), 0 2px 4px oklch(0% 0 0 / 0.2);
+  --shadow-lg:  0 8px 24px oklch(0% 0 0 / 0.45), 0 4px 8px oklch(0% 0 0 / 0.25);
+
+  /* ---- Scrim (modal backdrop) ---- */
+  --scrim: oklch(0% 0 0 / 0.65);
+
+  /* ---- Motion ---- */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* ---- Reduced-motion override ---- */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   Base reset + typography
+   ============================================================ */
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  background: var(--bg);
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: var(--surface-base);
+  color: var(--text);
+  /* Full-height grid shell: header row (auto) + content row (1fr) */
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* ============================================================
+   Header
+   ============================================================ */
+
+header {
+  padding: var(--space-4) var(--space-6) var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--text);
 }
 
-header {
-  padding: 1rem 1.5rem 0.25rem;
+header .sub {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
 }
-header h1 { margin: 0; font-size: 1.4rem; }
-header .sub { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.9rem; }
+
+/* ============================================================
+   Main layout — CSS grid, board column intrinsic + panel fills
+   ============================================================ */
 
 main {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 1.5rem;
-  padding: 1.25rem 1.5rem;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: auto minmax(280px, 1fr);
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  overflow: hidden;
+  min-height: 0;
 }
 
-.board-col { display: flex; flex-direction: column; gap: 0.75rem; flex: 0 0 auto; }
+/* ============================================================
+   Board column
+   ============================================================ */
 
+.board-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 0 0 auto;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* Board wrap: eval-bar | board side by side */
+.board-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+/* Eval bar — empty mount; another agent fills + styles in panel.css */
+#eval-bar {
+  width: 14px;
+  flex: 0 0 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  /* min-height mirrors the board */
+  min-height: 480px;
+}
+
+/* Board itself — refined framed container */
 #board {
   width: 480px;
   height: 480px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: var(--shadow-md), 0 0 0 2px var(--border);
 }
 
-.controls { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+/* ============================================================
+   Controls row
+   ============================================================ */
+
+.controls {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* ============================================================
+   Buttons — base system
+   ============================================================ */
 
 button {
-  background: var(--panel-bg);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--surface-raised);
   color: var(--text);
-  border: 1px solid #555;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   padding: 0.45rem 0.8rem;
-  font-size: 0.9rem;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
   cursor: pointer;
+  transition:
+    border-color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
 }
-button:hover { border-color: var(--accent); }
-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.fen-row { display: flex; gap: 0.5rem; width: 480px; }
+button:hover {
+  border-color: var(--accent);
+  background: var(--surface-overlay);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button:active {
+  background: var(--accent-dim);
+}
+
+/* Lucide icon inside buttons — size-match text */
+button i[data-lucide] {
+  width: 1em;
+  height: 1em;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   FEN row
+   ============================================================ */
+
+.fen-row {
+  display: flex;
+  gap: var(--space-2);
+  width: 480px;
+}
+
 #fen-input {
   flex: 1;
-  background: #222;
+  background: var(--surface-raised);
   color: var(--text);
-  border: 1px solid #555;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   padding: 0.45rem 0.6rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.85rem;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  transition: border-color var(--motion-fast) var(--ease-out);
 }
-#fen-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+#fen-input::placeholder { color: var(--muted); }
+
+#fen-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
 
 .error { color: var(--error); font-size: 0.85rem; }
 
-/* ---- Setup (pregame) editor ---- */
-/* Hide play-only controls while editing a position. */
+/* ============================================================
+   Primary button variant
+   ============================================================ */
+
+button.primary {
+  background: var(--accent);
+  color: var(--accent-on);
+  font-weight: 700;
+  border-color: var(--accent);
+}
+
+button.primary:hover {
+  filter: brightness(1.1);
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+/* ============================================================
+   Setup (pregame) editor bar
+   ============================================================ */
+
 body.setup-mode #undo,
 body.setup-mode #redo,
 body.setup-mode #reset,
@@ -89,16 +304,35 @@ body.setup-mode #fen-error { display: none; }
   width: 480px;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  background: var(--panel-bg);
-  border-radius: 10px;
-  padding: 0.8rem 0.9rem;
+  gap: var(--space-2);
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-sm);
 }
-.setup-hint { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
 
-.palette { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
-.palette-set { display: inline-flex; gap: 0.3rem; padding: 0.15rem; border-radius: 6px; }
-.palette-set.dark { background: #222; }
+.setup-bar[hidden] { display: none; }
+
+.setup-hint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.palette { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+
+.palette-set {
+  display: inline-flex;
+  gap: var(--space-1);
+  padding: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.palette-set.dark {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+}
 
 .palette button {
   min-width: 2.1rem;
@@ -106,81 +340,228 @@ body.setup-mode #fen-error { display: none; }
   line-height: 1;
   padding: 0.3rem 0.45rem;
 }
+
 .palette .tool { font-size: 0.85rem; }
+
 .palette button.active {
   border-color: var(--accent);
-  background: #4a4a4a;
+  background: var(--accent-dim);
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
 
-.setup-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
-.setup-label { font-size: 0.85rem; color: var(--muted); }
+.setup-row { display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
+.setup-label { font-size: 0.82rem; color: var(--text-secondary); }
 .setup-spacer { flex: 1; }
 
-.seg.active { border-color: var(--accent); background: #4a4a4a; }
-
-.setup-actions { display: flex; gap: 0.5rem; }
-button.primary {
-  background: var(--accent);
-  color: #10243f;
-  font-weight: 700;
+.seg.active {
   border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
 }
-button.primary:hover { filter: brightness(1.08); }
+
+.setup-actions { display: flex; gap: var(--space-2); }
+
+/* ============================================================
+   Right panel — tabbed aside
+   ============================================================ */
 
 .panel {
-  background: var(--panel-bg);
-  border-radius: 10px;
-  padding: 1.1rem 1.25rem;
-  flex: 1 1 260px;
-  min-width: 260px;
-  max-width: 420px;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  overflow: hidden;        /* children scroll inside */
+  min-height: 0;
+  min-width: 0;
 }
+
+/* Scrollable interior below the tab bar */
+.panel > [role="tabpanel"] {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-height: 0;
+}
+
+/* ---- Tab bar ---- */
+#panel-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-base);
+  flex-shrink: 0;
+}
+
+#panel-tabs button {
+  flex: 1;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: var(--space-3) var(--space-2);
+  text-transform: uppercase;
+  transition:
+    color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+  white-space: nowrap;
+}
+
+#panel-tabs button:hover {
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+  border-bottom-color: var(--border);
+}
+
+#panel-tabs button[aria-selected="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--surface-panel);
+}
+
+#panel-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ---- Tab panels: non-active hidden ---- */
+[role="tabpanel"]:not(.is-active) { display: none; }
+
+/* ---- data-mode: in non-play modes the panel UI lives BELOW the board
+   (setup-bar / trap-bar / rep-bar). Hide the right panel entirely and collapse
+   to a single board column — no empty box, no contradictory play-mode eval, and
+   the board gets the room. Reverts automatically in play mode. ---- */
+body[data-mode="setup"] main,
+body[data-mode="trap-watch"] main,
+body[data-mode="trap-practice"] main,
+body[data-mode="rep-practice"] main {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body[data-mode="setup"] .panel,
+body[data-mode="trap-watch"] .panel,
+body[data-mode="trap-practice"] .panel,
+body[data-mode="rep-practice"] .panel {
+  display: none;
+}
+
+/* ============================================================
+   Section label
+   ============================================================ */
 
 .eval-label {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--muted);
-  margin-bottom: 0.2rem;
+  margin-bottom: var(--space-1);
 }
 
-.eval { font-size: 2.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* ============================================================
+   Eval display
+   ============================================================ */
+
+.eval {
+  font-size: 2.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-family: 'Inter', sans-serif;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* ============================================================
+   Move quality
+   ============================================================ */
 
 .quality {
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   font-weight: 600;
   text-transform: capitalize;
 }
-.q-best { color: var(--q-best); }
-.q-good { color: var(--q-good); }
-.q-inaccuracy { color: var(--q-inaccuracy); }
-.q-mistake { color: var(--q-mistake); }
-.q-blunder { color: var(--q-blunder); }
-/* Book move: calm blue, no "capitalize" surprises ("Book Move" is already cased). */
-.q-book { color: var(--q-book); }
 
-.best-move { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
-.pv {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.9rem;
-  color: var(--text);
-  line-height: 1.5;
-  word-spacing: 0.15rem;
+.q-best       { color: var(--q-best); }
+.q-good       { color: var(--q-good); }
+.q-inaccuracy { color: var(--q-inaccuracy); }
+.q-mistake    { color: var(--q-mistake); }
+.q-blunder    { color: var(--q-blunder); }
+.q-book       { color: var(--q-book); }
+
+/* ============================================================
+   Best move + PV
+   ============================================================ */
+
+.best-move {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: var(--space-2);
 }
 
-.status { font-size: 0.85rem; color: var(--muted); min-height: 1.2em; }
+.pv {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  word-spacing: 0.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   Status
+   ============================================================ */
+
+.status {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  min-height: 1.2em;
+}
+
 .status.error { color: var(--error); }
 
-/* ---- Opening panel ---- */
-.opening-name { font-size: 1.05rem; font-weight: 600; }
+/* Analysis status mount (loading indicator) is styled in feedback.css (owner). */
 
-/* ---- Trap watch + practice modes ---- */
-/* In both trap modes the play + setup controls are hidden (the board is either
-   view-only in watch, or driven by the drill in practice). */
+/* ============================================================
+   Opening panel
+   ============================================================ */
+
+.opening-name {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+/* ============================================================
+   Empty state
+   ============================================================ */
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--space-4);
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.empty-state p { margin: 0; }
+
+/* Hide the repertoire placeholder once the tree is populated (section unhidden). */
+#repertoire-section:not([hidden]) ~ #repertoire-empty-state { display: none; }
+
+/* ============================================================
+   Trap modes — hide play/setup controls
+   ============================================================ */
+
 body.trap-watch-mode #undo,
 body.trap-watch-mode #redo,
 body.trap-watch-mode #reset,
@@ -194,113 +575,206 @@ body.trap-practice-mode #setup-toggle,
 body.trap-practice-mode .fen-row,
 body.trap-practice-mode #fen-error { display: none; }
 
-/* ---- Traps section ---- */
-.traps-section { display: flex; flex-direction: column; gap: 0.4rem; }
+/* ============================================================
+   Traps section (inside Traps tab)
+   ============================================================ */
 
-.traps-filters { display: flex; gap: 0.4rem; }
+.traps-section { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.traps-filters { display: flex; gap: var(--space-2); }
+
 #traps-name-filter {
   flex: 1;
-  background: #222;
+  background: var(--surface-raised);
   color: var(--text);
-  border: 1px solid #555;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   padding: 0.35rem 0.5rem;
+  font-family: inherit;
   font-size: 0.85rem;
+  transition: border-color var(--motion-fast) var(--ease-out);
 }
-#traps-name-filter:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+#traps-name-filter::placeholder { color: var(--muted); }
+
+#traps-name-filter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
 
 #traps-color-filter {
-  background: #222;
+  background: var(--surface-raised);
   color: var(--text);
-  border: 1px solid #555;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   padding: 0.35rem 0.45rem;
+  font-family: inherit;
   font-size: 0.85rem;
   cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease-out);
 }
-#traps-color-filter:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-.traps-list { display: flex; flex-direction: column; gap: 0.2rem; max-height: 200px; overflow-y: auto; }
+#traps-color-filter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.traps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
 .traps-list button {
   text-align: left;
-  font-size: 0.85rem;
-  padding: 0.35rem 0.5rem;
+  font-size: 0.83rem;
+  padding: 0.4rem 0.55rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
+  background: var(--surface-raised);
+  border-color: transparent;
 }
+
+.traps-list button:hover {
+  border-color: var(--accent);
+  background: var(--surface-overlay);
+}
+
 .trap-item-name { flex: 1; }
-.trap-item-meta { display: flex; gap: 0.4rem; align-items: center; color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+
+.trap-item-meta {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
 .trap-item-eco { font-variant-numeric: tabular-nums; }
 .trap-item-color { text-transform: capitalize; }
-.trap-item-commonness { font-size: 0.75rem; }
+.trap-item-commonness { font-size: 0.72rem; }
 .traps-empty { color: var(--muted); font-size: 0.82rem; padding: 0.3rem 0; }
 
-/* ---- Trap chip (live nudge) ---- */
+/* ============================================================
+   Trap chip (live nudge, inside analysis tab)
+   ============================================================ */
+
 .trap-chip {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  background: #1f3a5f;
+  gap: var(--space-2);
+  background: var(--accent-dim);
   border: 1px solid var(--accent);
-  border-radius: 8px;
-  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
   font-size: 0.85rem;
 }
+
 .trap-chip[hidden] { display: none; }
-.trap-chip-text { flex: 1; font-weight: 600; color: var(--accent); }
+
+.trap-chip-text {
+  flex: 1;
+  font-weight: 600;
+  color: var(--accent);
+}
+
 .trap-chip-drill {
   font-size: 0.8rem;
   padding: 0.25rem 0.55rem;
   background: var(--accent);
-  color: #10243f;
+  color: var(--accent-on);
   font-weight: 700;
   border-color: var(--accent);
 }
-.trap-chip-drill:hover { filter: brightness(1.08); }
+
+.trap-chip-drill:hover {
+  filter: brightness(1.1);
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
 .trap-chip-dismiss {
   font-size: 0.75rem;
   padding: 0.2rem 0.4rem;
   background: transparent;
-  border-color: #555;
+  border-color: var(--border);
   color: var(--muted);
   min-width: unset;
 }
-.trap-chip-dismiss:hover { border-color: var(--error); color: var(--error); }
 
-/* ---- Trap bar (drill study bar) ---- */
+.trap-chip-dismiss:hover {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+/* ============================================================
+   Trap bar (drill study bar — stays in board column)
+   ============================================================ */
+
 .trap-bar {
   width: 480px;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  background: var(--panel-bg);
-  border-radius: 10px;
-  padding: 0.8rem 0.9rem;
+  gap: var(--space-2);
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-sm);
 }
+
 .trap-bar[hidden] { display: none; }
-.trap-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+
+.trap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .trap-title { font-weight: 600; }
-.trap-stepper { display: flex; align-items: center; gap: 0.4rem; }
-.trap-stepper[hidden] { display: none; }  /* hidden in practice mode */
-.trap-controls { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-.trap-move { font-size: 1.0rem; font-weight: 600; }
-.trap-note { font-size: 0.9rem; line-height: 1.5; color: var(--text); white-space: pre-line; }
-.trap-feedback { font-size: 0.9rem; font-weight: 600; padding: 0.3rem 0; }
+
+.trap-stepper { display: flex; align-items: center; gap: var(--space-1); }
+.trap-stepper[hidden] { display: none; }
+
+.trap-controls { display: flex; gap: var(--space-1); flex-wrap: wrap; }
+
+.trap-move { font-size: 1rem; font-weight: 600; }
+
+.trap-note {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-line;
+}
+
+.trap-feedback {
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: var(--space-1) 0;
+}
+
 .trap-feedback[hidden] { display: none; }
 .trap-feedback.feedback-good { color: var(--q-best); }
-.trap-feedback.feedback-bad { color: var(--error); }
-.trap-reveal { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.trap-feedback.feedback-bad  { color: var(--error); }
+
+.trap-reveal { display: flex; gap: var(--space-1); flex-wrap: wrap; }
 .trap-reveal[hidden] { display: none; }
 
 @media (max-width: 560px) {
   .trap-bar { width: 92vw; }
 }
 
-/* ---- Repertoire trainer ---- */
-/* In rep-practice the play + setup controls are hidden (the board is driven by
-   the practice loop), mirroring the trap modes. */
+/* ============================================================
+   Repertoire trainer mode — hide play/setup controls
+   ============================================================ */
+
 body.rep-mode #undo,
 body.rep-mode #redo,
 body.rep-mode #reset,
@@ -308,11 +782,23 @@ body.rep-mode #setup-toggle,
 body.rep-mode .fen-row,
 body.rep-mode #fen-error { display: none; }
 
-.repertoire-section { display: flex; flex-direction: column; gap: 0.4rem; }
+/* ============================================================
+   Repertoire section (inside Repertoire tab)
+   ============================================================ */
+
+.repertoire-section { display: flex; flex-direction: column; gap: var(--space-2); }
 .repertoire-section[hidden] { display: none; }
-.repertoire-tree { display: flex; flex-direction: column; gap: 0.25rem; max-height: 260px; overflow-y: auto; }
+
+.repertoire-tree {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: 340px;
+  overflow-y: auto;
+}
 
 .rep-color { display: flex; flex-direction: column; }
+
 .rep-color-hdr {
   text-align: left;
   font-weight: 700;
@@ -320,15 +806,33 @@ body.rep-mode #fen-error { display: none; }
   color: var(--accent);
   background: transparent;
   border: none;
-  padding: 0.3rem 0.2rem;
+  padding: var(--space-1) var(--space-1);
   cursor: pointer;
 }
-.rep-color-hdr:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.rep-color-body { display: flex; flex-direction: column; gap: 0.15rem; padding-left: 0.4rem; }
+
+.rep-color-hdr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.rep-color-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: var(--space-2);
+}
+
 .rep-color-body.collapsed { display: none; }
 
 .rep-opening { display: flex; flex-direction: column; }
-.rep-opening-hdr { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+
+.rep-opening-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
 .rep-opening-name {
   flex: 1;
   text-align: left;
@@ -337,107 +841,227 @@ body.rep-mode #fen-error { display: none; }
   background: transparent;
   border: none;
   color: var(--text);
-  padding: 0.25rem 0.2rem;
+  padding: var(--space-1) var(--space-1);
   cursor: pointer;
 }
-.rep-opening-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.rep-opening-body { display: flex; flex-direction: column; gap: 0.1rem; padding-left: 0.5rem; }
+
+.rep-opening-name:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.rep-opening-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: var(--space-3);
+}
+
 .rep-opening-body.collapsed { display: none; }
 
 .rep-practice-btn {
   font-size: 0.72rem;
   padding: 0.15rem 0.45rem;
   background: var(--accent);
-  color: #10243f;
+  color: var(--accent-on);
   font-weight: 700;
   border-color: var(--accent);
   min-width: unset;
 }
-.rep-practice-btn:hover { filter: brightness(1.08); }
 
-.rep-line { display: flex; align-items: center; gap: 0.3rem; }
+.rep-practice-btn:hover {
+  filter: brightness(1.1);
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.rep-line { display: flex; align-items: center; gap: var(--space-1); }
+
 .rep-line-jump {
   flex: 1;
   text-align: left;
   font-size: 0.82rem;
-  background: #222;
-  border: 1px solid #555;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 6px;
-  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
   cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease-out);
 }
+
 .rep-line-jump:hover { border-color: var(--accent); }
-.rep-line-jump:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.rep-line-jump:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .rep-line-jump.is-trap { color: var(--q-book); }
+
 .rep-line-practice {
   font-size: 0.72rem;
   padding: 0.2rem 0.4rem;
   min-width: unset;
   background: transparent;
-  border-color: #555;
+  border-color: var(--border);
   color: var(--muted);
 }
-.rep-line-practice:hover { border-color: var(--accent); color: var(--accent); }
 
-/* ---- Repertoire practice bar ---- */
+.rep-line-practice:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ============================================================
+   Repertoire practice bar (stays in board column)
+   ============================================================ */
+
 .rep-bar {
   width: 480px;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  background: var(--panel-bg);
-  border-radius: 10px;
-  padding: 0.8rem 0.9rem;
+  gap: var(--space-2);
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-sm);
 }
+
 .rep-bar[hidden] { display: none; }
-.rep-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+
+.rep-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .rep-title { font-weight: 600; }
-.rep-move { font-size: 1.0rem; font-weight: 600; }
-.rep-note { font-size: 0.9rem; line-height: 1.5; color: var(--text); white-space: pre-line; }
-.rep-feedback { font-size: 0.9rem; font-weight: 600; padding: 0.3rem 0; }
+.rep-move { font-size: 1rem; font-weight: 600; }
+
+.rep-note {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-line;
+}
+
+.rep-feedback {
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: var(--space-1) 0;
+}
+
 .rep-feedback[hidden] { display: none; }
 .rep-feedback.feedback-good { color: var(--q-best); }
-.rep-feedback.feedback-bad { color: var(--error); }
-.rep-controls { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.rep-feedback.feedback-bad  { color: var(--error); }
+
+.rep-controls { display: flex; gap: var(--space-1); flex-wrap: wrap; }
 
 @media (max-width: 560px) {
   .rep-bar { width: 92vw; }
 }
 
-/* ---- Promotion picker overlay ---- */
-.promo-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
-/* The HTML `hidden` attribute must win over display:flex above. */
-.promo-overlay[hidden] { display: none; }
+/* ============================================================
+   Promotion dialog (native <dialog> replaces the old overlay)
+   ============================================================ */
 
-/* Same trap: any flex bar toggled via `hidden` needs this so the attribute wins. */
-.setup-bar[hidden] { display: none; }
-.promo-box {
-  background: var(--panel-bg);
-  border-radius: 10px;
-  padding: 1.25rem 1.5rem;
+#promo-dialog {
+  background: var(--surface-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-lg);
   text-align: center;
+  color: var(--text);
+  /* Override browser defaults */
+  max-width: 320px;
+  width: 90vw;
 }
-.promo-title { margin-bottom: 0.75rem; font-weight: 600; }
-.promo-choices { display: flex; gap: 0.5rem; }
+
+#promo-dialog::backdrop {
+  background: var(--scrim);
+  backdrop-filter: blur(2px);
+}
+
+.promo-title {
+  margin-bottom: var(--space-4);
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.promo-choices {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
 .promo-choices button { font-size: 1rem; }
 
+/* ============================================================
+   Toasts container — styled in feedback.css (single owner).
+   ============================================================ */
+
+/* ============================================================
+   Trap variation select
+   ============================================================ */
+
+.trap-variation {
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.45rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.trap-variation[hidden] { display: none; }
+
+/* ============================================================
+   Responsive — tablet/mobile
+   ============================================================ */
+
 @media (max-width: 820px) {
-  /* Not enough room for board + side panel → stack the panel below. */
-  main { flex-direction: column; }
-  .panel { max-width: 480px; }
+  body {
+    height: auto;
+    overflow: auto;
+  }
+
+  main {
+    grid-template-columns: 1fr;
+    overflow: visible;
+    padding: var(--space-4);
+  }
+
+  .board-col {
+    overflow-y: visible;
+  }
+
+  .panel {
+    /* On mobile the panel sits below the board; remove fixed height */
+    min-height: 400px;
+    max-height: none;
+  }
+
+  #eval-bar {
+    min-height: 0;
+    height: auto;
+    align-self: stretch;
+  }
 }
 
 @media (max-width: 560px) {
-  #board, .fen-row { width: 92vw; height: auto; }
+  #board,
+  .fen-row,
+  .setup-bar,
+  .trap-bar,
+  .rep-bar { width: 92vw; }
+
   #board { height: 92vw; }
-  .panel { max-width: 92vw; }
+
+  #eval-bar { min-height: 92vw; }
 }

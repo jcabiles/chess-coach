@@ -22,6 +22,11 @@ import { Chess } from 'https://esm.sh/chessops@0.14.2/chess';
 import { parseFen, makeFen, INITIAL_FEN } from 'https://esm.sh/chessops@0.14.2/fen';
 import { chessgroundDests } from 'https://esm.sh/chessops@0.14.2/compat';
 import { parseSquare, parseUci } from 'https://esm.sh/chessops@0.14.2/util';
+import { initPanel, renderAnalysisPanel, renderBookMovePanel } from './panel.js';
+import { formatEval } from './format.js';
+import { initMovelist } from './movelist.js';
+import { initFeedback } from './feedback.js';
+import { initShortcuts } from './shortcuts.js';
 
 const EMPTY_PLACEMENT = '8/8/8/8/8/8/8/8';
 const INITIAL_PLACEMENT = INITIAL_FEN.split(' ')[0];
@@ -44,6 +49,7 @@ const state = {
   baseFen: INITIAL_FEN,
   moves: [],        // UCI strings applied from baseFen
   cursor: 0,        // how many of `moves` are currently applied
+  moveQuality: [],  // quality label per played move (transient; NOT persisted)
   orientation: 'white',
   setupColor: 'white', // side-to-move while in setup mode
 };
@@ -65,6 +71,30 @@ let repSnapshot = null;    // saved play game captured when entering rep-practic
 let repEngineToken = 0;    // guards stale async engine-opponent replies (take-back/restart/exit)
 
 const byId = (id) => document.getElementById(id);
+
+// ---------------------------------------------------------------------------
+// Tiny event bus (used by the injected api and internal emitters).
+// ---------------------------------------------------------------------------
+const _busListeners = Object.create(null); // { [evt]: fn[] }
+
+function on(evt, fn) {
+  if (!_busListeners[evt]) _busListeners[evt] = [];
+  _busListeners[evt].push(fn);
+}
+
+function emit(evt, ...args) {
+  const fns = _busListeners[evt];
+  if (fns) fns.forEach((fn) => { try { fn(...args); } catch (_) {} });
+}
+
+// Set state.mode, reflect it on the body attribute, and emit the mode:change event.
+// All mode transitions should go through this helper so listeners (tab-switch,
+// body class watchers, etc.) are always notified.
+function setMode(mode) {
+  state.mode = mode;
+  document.body.dataset.mode = mode;
+  emit('mode:change', mode);
+}
 
 // ---------------------------------------------------------------------------
 // Session persistence (localStorage). Mode-aware: in setup we save the working
@@ -187,6 +217,7 @@ function syncBoard() {
     movable: { free: false, color: pos.turn, dests: chessgroundDests(pos) },
     draggable: { enabled: true, deleteOnDropOff: false },
   });
+  emit('position:change');
 }
 
 // --- promotion picker ------------------------------------------------------
@@ -200,18 +231,56 @@ function isPromotion(pos, from, to) {
 }
 
 function askPromotion() {
-  return new Promise((resolve) => {
-    const overlay = byId('promo-overlay');
-    overlay.hidden = false;
-    const handler = (e) => {
-      const btn = e.target.closest('button[data-piece]');
-      if (!btn) return;
-      overlay.hidden = true;
-      overlay.removeEventListener('click', handler);
-      resolve(btn.dataset.piece);
-    };
-    overlay.addEventListener('click', handler);
-  });
+  // Prefer the <dialog id="promo-dialog"> introduced by T1. Fall back to the
+  // legacy #promo-overlay if the dialog is absent (isolation / old HTML).
+  const dialog = byId('promo-dialog');
+  if (dialog) {
+    return new Promise((resolve, reject) => {
+      // Clean up any prior listeners before re-opening.
+      const clone = dialog.cloneNode(true);
+      dialog.parentNode.replaceChild(clone, dialog);
+      const d = byId('promo-dialog');
+
+      d.returnValue = '';
+
+      // A piece click records the choice in returnValue, then closes the dialog.
+      d.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-piece]');
+        if (!btn) return;
+        d.returnValue = btn.dataset.piece;
+        d.close();
+      });
+
+      // 'close' is the SOLE settlement point — it fires for both a piece-pick
+      // close() and an Esc/backdrop cancel. returnValue distinguishes them, so
+      // the Promise settles exactly once (no double-settle).
+      d.addEventListener('close', () => {
+        if (d.returnValue) resolve(d.returnValue);
+        else reject(new Error('promotion-cancelled'));
+      });
+
+      d.showModal();
+    });
+  }
+
+  // Fallback: legacy overlay (graceful degradation when #promo-dialog absent).
+  const overlay = byId('promo-overlay');
+  if (overlay) {
+    return new Promise((resolve) => {
+      overlay.hidden = false;
+      const handler = (e) => {
+        const btn = e.target.closest('button[data-piece]');
+        if (!btn) return;
+        overlay.hidden = true;
+        overlay.removeEventListener('click', handler);
+        resolve(btn.dataset.piece);
+      };
+      overlay.addEventListener('click', handler);
+    });
+  }
+
+  // Last resort: no UI available — resolve with queen.
+  return Promise.resolve('q');
 }
 
 // --- server calls ----------------------------------------------------------
@@ -230,6 +299,7 @@ async function postJSON(url, body) {
 }
 
 async function refreshAnalysis() {
+  emit('analysis:start');
   setStatus('Analyzing…');
   try {
     if (state.cursor === 0) {
@@ -245,7 +315,9 @@ async function refreshAnalysis() {
       applyMoveResponse(data);
     }
     setStatus('');
+    emit('analysis:end');
   } catch (err) {
+    emit('analysis:end');
     setStatus(err.message, true);
   }
 }
@@ -264,7 +336,13 @@ async function onUserMove(orig, dest) {
   const before = positionAt(state.cursor);
   let promo = '';
   if (isPromotion(before.pos, orig, dest)) {
-    promo = await askPromotion();
+    try {
+      promo = await askPromotion();
+    } catch (_) {
+      // Promotion dialog dismissed (Esc/cancel) — restore the board and abort.
+      syncBoard();
+      return;
+    }
   }
   const uci = orig + dest + promo;
   const fenBefore = fenOf(before.pos);
@@ -286,7 +364,12 @@ async function onUserMove(orig, dest) {
   }
 
   state.moves = state.moves.slice(0, state.cursor);
+  state.moveQuality = state.moveQuality.slice(0, state.cursor);
   state.moves.push(uci);
+  // Index-assign (not push): if moveQuality is shorter than the history — e.g. after a
+  // restore/jump where prior moves have no recorded quality — this still lands the new
+  // move's quality at the correct index (gaps stay undefined → render neutral).
+  state.moveQuality[state.cursor] = data.book ? 'book' : ((data.analysis && data.analysis.quality) || null);
   state.cursor += 1;
 
   syncBoard();
@@ -328,49 +411,20 @@ function onBoardPointerDown(e) {
 
 // --- rendering -------------------------------------------------------------
 
-function formatEval(a) {
-  if (a == null) return '—';
-  if (a.mate != null) {
-    const sign = a.mate > 0 ? '+' : '-';
-    return `M${sign}${Math.abs(a.mate)}`;
-  }
-  if (a.evalCp != null) {
-    const pawns = a.evalCp / 100;
-    return (pawns >= 0 ? '+' : '') + pawns.toFixed(2);
-  }
-  return '—';
-}
-
 // `opts.suppressQuality` forces the quality label to '—' regardless of the
 // engine's verdict. Trap practice passes it so a real "Blunder!" on a
 // deliberately dubious trapper move never contradicts the lesson.
+// Delegates to the panel module — this wrapper keeps internal call sites stable.
 function renderAnalysis(a, opts = {}) {
-  byId('eval').textContent = formatEval(a);
-
-  const qEl = byId('quality');
-  qEl.className = 'quality';
-  if (a && a.quality && !opts.suppressQuality) {
-    qEl.textContent = a.quality;
-    qEl.classList.add(`q-${a.quality}`);
-  } else {
-    qEl.textContent = '—';
-  }
-
-  byId('best-move').textContent = (a && a.bestMoveSan) || '—';
-  byId('pv').textContent = (a && a.pvSan && a.pvSan.length) ? a.pvSan.join(' ') : '—';
+  renderAnalysisPanel(a, opts);
 }
 
 // Book move: the server skipped Stockfish (the line is known theory), so there is
 // no eval/best/PV — show a calm "Book Move" badge in the quality slot, naming the
 // line when the server identified one ("Book Move · Ruy Lopez").
+// Delegates to the panel module — this wrapper keeps internal call sites stable.
 function renderBookMove(data) {
-  byId('eval').textContent = '—';
-  const qEl = byId('quality');
-  qEl.className = 'quality q-book';
-  const name = data && data.openingName;
-  qEl.textContent = name ? `Book Move · ${name}` : 'Book Move';
-  byId('best-move').textContent = '—';
-  byId('pv').textContent = '—';
+  renderBookMovePanel(data);
 }
 
 // Render a play-mode /api/move response: a book move shows the badge (no engine
@@ -407,6 +461,18 @@ function redo() {
   persist();
 }
 
+// Jump to an arbitrary ply (move-list click / Home / End). Mirrors undo/redo.
+function goto(n) {
+  if (state.mode !== 'play') return;
+  const target = Math.min(Math.max(0, n | 0), state.moves.length);
+  if (target === state.cursor) return;
+  state.cursor = target;
+  syncBoard();
+  refreshAnalysis();
+  refreshOpeningThenTraps();
+  persist();
+}
+
 function flip() {
   state.orientation = state.orientation === 'white' ? 'black' : 'white';
   ground.set({ orientation: state.orientation });
@@ -417,6 +483,7 @@ function reset() {
   if (state.mode !== 'play') return;
   state.baseFen = INITIAL_FEN;
   state.moves = [];
+  state.moveQuality = [];
   state.cursor = 0;
   byId('fen-error').hidden = true;
   syncBoard();
@@ -456,11 +523,13 @@ async function loadFen() {
   errEl.hidden = true;
   state.baseFen = data.fen;
   state.moves = [];
+  state.moveQuality = [];
   state.cursor = 0;
   syncBoard();
   renderAnalysis(data.analysis);
   persist();
   refreshOpeningThenTraps();
+  emit('toast:show', 'Position loaded');
 }
 
 // --- setup mode: transitions + tools ---------------------------------------
@@ -521,9 +590,9 @@ function startPosition() { ground.set({ fen: INITIAL_PLACEMENT }); persist(); }
 
 function enterSetup() {
   // Non-destructive: snapshot the current game so Cancel can restore it.
-  playSnapshot = { baseFen: state.baseFen, moves: state.moves.slice(), cursor: state.cursor };
+  playSnapshot = { baseFen: state.baseFen, moves: state.moves.slice(), moveQuality: state.moveQuality.slice(), cursor: state.cursor };
   const { pos } = positionAt(state.cursor);
-  state.mode = 'setup';
+  setMode('setup');
   state.setupColor = pos.turn;
   ground.set({ fen: fenOf(pos).split(' ')[0], lastMove: undefined, highlight: { lastMove: false, check: false } });
   enterSetupUI();
@@ -588,8 +657,9 @@ function beginGame() {
 
   state.baseFen = fen;
   state.moves = [];
+  state.moveQuality = [];
   state.cursor = 0;
-  state.mode = 'play';
+  setMode('play');
   playSnapshot = null;
   exitSetupToPlay();
 }
@@ -598,8 +668,9 @@ function cancelSetup() {
   const snap = playSnapshot || { baseFen: INITIAL_FEN, moves: [], cursor: 0 };
   state.baseFen = snap.baseFen;
   state.moves = snap.moves;
+  state.moveQuality = snap.moveQuality || [];
   state.cursor = snap.cursor;
-  state.mode = 'play';
+  setMode('play');
   playSnapshot = null;
   exitSetupToPlay();
 }
@@ -669,7 +740,7 @@ function renderTraps() {
 
   if (!filtered.length) {
     const empty = document.createElement('div');
-    empty.className = 'traps-empty';
+    empty.className = 'traps-empty empty-state';
     empty.textContent = trapsData.length
       ? 'No traps match the filter.'
       : 'No traps loaded.';
@@ -792,7 +863,7 @@ function buildTrap(trapData, variationIndex = 0) {
 async function enterTrap(trapId) {
   // Snapshot only if coming from play mode (not already in a trap).
   if (state.mode === 'play') {
-    studySnapshot = { baseFen: state.baseFen, moves: state.moves.slice(), cursor: state.cursor };
+    studySnapshot = { baseFen: state.baseFen, moves: state.moves.slice(), moveQuality: state.moveQuality.slice(), cursor: state.cursor };
   }
 
   // Fetch the full trap.
@@ -810,7 +881,7 @@ async function enterTrap(trapId) {
   }
 
   trap = buildTrap(trapData, 0);
-  state.mode = 'trap-watch';
+  setMode('trap-watch');
 
   // Show trap bar, hide play controls (same body-class pattern as study-mode).
   showTrapUI(true);
@@ -881,12 +952,12 @@ function applyTrapModeUI() {
 function toggleTrapMode() {
   if (!trap) return;
   if (state.mode === 'trap-practice') {
-    state.mode = 'trap-watch';
+    setMode('trap-watch');
     applyTrapModeUI();
     byId('trap-feedback').textContent = '';
     goToTrapStep(0);
   } else if (state.mode === 'trap-watch') {
-    state.mode = 'trap-practice';
+    setMode('trap-practice');
     applyTrapModeUI();
     startPractice();
   }
@@ -1002,8 +1073,9 @@ function exitTrap() {
   const snap = studySnapshot || { baseFen: INITIAL_FEN, moves: [], cursor: 0 };
   state.baseFen = snap.baseFen;
   state.moves = snap.moves;
+  state.moveQuality = snap.moveQuality || [];
   state.cursor = snap.cursor;
-  state.mode = 'play';
+  setMode('play');
   studySnapshot = null;
   trap = null;
   showTrapUI(false);
@@ -1326,7 +1398,13 @@ function renderRepertoireTree() {
   const cat = repTree && repTree.catalog;
   const total = cat ? (cat.white.length + cat.black.length) : 0;
   byId('repertoire-section').hidden = !total;
-  if (!total) return;
+  if (!total) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'No repertoire lines loaded.';
+    host.appendChild(empty);
+    return;
+  }
 
   for (const color of ['white', 'black']) {
     const groups = cat[color];
@@ -1399,6 +1477,7 @@ function repJump(line, color) {
   ensurePlay();
   state.baseFen = INITIAL_FEN;
   state.moves = line.ucis.slice();
+  state.moveQuality = [];
   state.cursor = line.ucis.length;
   state.orientation = color;
   ground.set({ orientation: color });
@@ -1483,8 +1562,8 @@ function startRepPractice(scopeIds, color, label) {
   if (!repTree || !repTree[color]) return;
   ensurePlay();
   repEngineToken++;            // invalidate any in-flight engine reply
-  repSnapshot = { baseFen: state.baseFen, moves: state.moves.slice(), cursor: state.cursor };
-  state.mode = 'rep-practice';
+  repSnapshot = { baseFen: state.baseFen, moves: state.moves.slice(), moveQuality: state.moveQuality.slice(), cursor: state.cursor };
+  setMode('rep-practice');
   state.orientation = color;
   rep = {
     scope: new Set(scopeIds),
@@ -1527,8 +1606,9 @@ function exitRepPractice() {
   const snap = repSnapshot || { baseFen: INITIAL_FEN, moves: [], cursor: 0 };
   state.baseFen = snap.baseFen;
   state.moves = snap.moves;
+  state.moveQuality = snap.moveQuality || [];
   state.cursor = snap.cursor;
-  state.mode = 'play';
+  setMode('play');
   repSnapshot = null;
   rep = null;
   showRepUI(false);
@@ -1676,6 +1756,9 @@ function repBack() {
 function init() {
   const restored = restore();
 
+  // Sync body attribute from the restored state (before any mode transitions fire).
+  document.body.dataset.mode = state.mode;
+
   const initialFen = state.mode === 'setup'
     ? ((restored && restored.setupPlacement) || EMPTY_PLACEMENT)
     : fenOf(positionAt(state.cursor).pos).split(' ')[0];
@@ -1706,6 +1789,63 @@ function init() {
       change: () => { if (state.mode === 'setup') persist(); },
     },
   });
+
+  // Build the injected api — after ground is created so getGround() is valid.
+  function closeAnyDialog() {
+    document.querySelectorAll('dialog[open]').forEach((d) => d.close());
+  }
+
+  const api = {
+    actions: {
+      undo,
+      redo,
+      flip,
+      reset,
+      goto,
+      stepBack: undo,       // stepBack/stepForward = undo/redo (cursor −/+)
+      stepForward: redo,
+      getState: () => state,
+      getGround: () => ground,
+      closeAnyDialog,
+    },
+    on,
+    emit,
+    mounts: {
+      evalBar: byId('eval-bar'),
+      toasts: byId('toasts'),
+      analysisStatus: byId('analysis-status'),
+      tabs: byId('panel-tabs'),
+    },
+  };
+
+  // Tab-switch wiring: clicking a [data-tab] button activates the matching panel.
+  // No-op outside 'play' mode; null-guarded if #panel-tabs is absent.
+  const tabsEl = api.mounts.tabs;
+  if (tabsEl) {
+    tabsEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-tab]');
+      if (!btn) return;
+      if (document.body.dataset.mode !== 'play') return;
+      const tabName = btn.dataset.tab;
+
+      // Deactivate all tab buttons and panels, activate the clicked one.
+      tabsEl.querySelectorAll('button[data-tab]').forEach((b) => {
+        const on = b === btn;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-selected', String(on));
+      });
+      ['analysis', 'opening', 'traps', 'repertoire'].forEach((name) => {
+        const panel = byId(`tab-${name}`);
+        if (panel) panel.classList.toggle('is-active', name === tabName);
+      });
+    });
+  }
+
+  // Init modules AFTER ground is created so api.getGround() returns a live instance.
+  initPanel(api);
+  initMovelist(api);
+  initFeedback(api);
+  initShortcuts(api);
 
   // Own board clicks for setup stamping (capture phase, before chessground).
   const boardEl = byId('board');
