@@ -59,6 +59,8 @@ All via environment variables; sensible defaults mean none are required to start
 | `CHESS_USERNAME` | _(unset)_ | Comma-separated names/aliases you play under (lichess / chess.com). Imported games are tagged with **your** color so the review coach analyzes *your* mistakes only. If unset, set the color per-import in the Review tab; un-tagged games are skipped in the profile. |
 | `GAMES_DB` | `data/games.db` | SQLite file for saved games + cached analysis (gitignored). |
 | `REVIEW_BG_DEPTH` | `10` | Stockfish depth for background game-review analysis. Interactive moves use a deeper search; the background job yields to interactive requests so play stays responsive. |
+| `ENGINE_SOFT_TIME` | `3.0` | Soft per-search time cap (seconds) for interactive analysis: Stockfish stops at the target depth **or** this time, whichever comes first, so a sharp position can't stall the UI. |
+| `ENGINE_HARD_TIMEOUT` | `8.0` | Hard watchdog (seconds): any single engine call exceeding this auto-kills and relaunches the Stockfish process so it can never wedge. Must be greater than `ENGINE_SOFT_TIME`. |
 
 Saved games and their analysis live in `data/games.db` (and any PGNs you drop in
 `data/games/`) — both gitignored, never committed.
@@ -73,6 +75,10 @@ The opening trainer uses the bundled lichess-org/chess-openings TSVs under
 - Paste a **FEN** and click *Load* to jump to a position.
 - After each move: eval, Stockfish's best move + line, and a quality label
   (best / good / inaccuracy / mistake / blunder).
+- If the engine ever feels stuck, the **Restart engine** button in the Analysis
+  panel relaunches Stockfish without disturbing your game (the position and move
+  list are preserved). Searches are time-bounded and a watchdog auto-restarts a
+  hung engine, so the app shouldn't wedge in the first place.
 - **Undo/redo** (or click any move in the **move list**) to step through your
   line; **Flip** to rotate the board.
 - **Set up position** to arrange any position freely, then *Begin Game*.
