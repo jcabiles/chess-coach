@@ -75,6 +75,10 @@ The opening trainer uses the bundled lichess-org/chess-openings TSVs under
 - Paste a **FEN** and click *Load* to jump to a position.
 - After each move: eval, Stockfish's best move + line, and a quality label
   (best / good / inaccuracy / mistake / blunder).
+- **Evaluate** toggle (Both / White / Black): set it to your color and Stockfish
+  only analyzes **your** moves — the opponent's are shown as "not evaluated" and
+  skip the engine entirely, roughly halving the work (faster, less load). *Both*
+  (the default) analyzes every move as before. Your choice is remembered.
 - If the engine ever feels stuck, the **Restart engine** button in the Analysis
   panel relaunches Stockfish without disturbing your game (the position and move
   list are preserved). Searches are time-bounded and a watchdog auto-restarts a
