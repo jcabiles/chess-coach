@@ -28,6 +28,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import (
+    accuracy,
     book,
     coaching,
     openings,
@@ -49,6 +50,7 @@ from app.models import (
     CoverageDict,
     EngineRestartResponse,
     EngineStatusResponse,
+    GameAccuracySummary,
     GameDetail,
     GameSummary,
     ImportRequest,
@@ -750,7 +752,11 @@ async def get_game_review(game_id: int):
         for p in ply_rows
     ]
 
-    return ReviewResponse(game_id=game_id, analysis_status=status, leaks=narrated, plies=plies)
+    summary = None
+    if status == "done":
+        summary = GameAccuracySummary(**accuracy.summarize(ply_rows, row.get("my_color")))
+
+    return ReviewResponse(game_id=game_id, analysis_status=status, leaks=narrated, plies=plies, summary=summary)
 
 
 @app.delete("/api/games/{game_id}")
