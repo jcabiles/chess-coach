@@ -1,31 +1,38 @@
 # AI-DLC profile — chess-training
 
-stack:        mixed (Python 3 / FastAPI backend · vanilla-ESM JS frontend — chessground/chessops SPA)
-artifact_dir: docs/ai-dlc            # base dir for roadmap/ prd/ contracts/ specs/ tickets/
+stack:        python (FastAPI + python-chess backend; vanilla ES-module frontend, no build step)
+artifact_dir: docs/ai-dlc
 
 verify:
-  test:  .venv/bin/python -m pytest -q          # full suite; runs engine-free via the get_engine fake seam
-  lint:  .venv/bin/ruff check app               # (ruff used in prior specs' verify-by)
-  boot:  uvicorn app.main:app --reload --port 8001   # → GET / 200; exercise UI in browser (Playwright/manual)
+  test:  .venv/bin/python -m pytest -q
+  lint:  .venv/bin/ruff check app tests
+  boot:  uvicorn app.main:app --reload --port 8001 (Claude Code sandbox blocks socket bind —
+         verify routes in-process via FastAPI TestClient); UI via Playwright-MCP on a live server
 
 hotspots:
-  - app/main.py        # FastAPI router — single owner of API routes
-  - app/engine.py      # one Stockfish process, all access serialized behind one asyncio.Lock
-  - app/models.py      # Pydantic request/response shapes (Analysis, MoveResponse, …)
-  - app/analysis.py    # pure eval/classify helpers
-  - static/app.js      # SPA controller (state, refreshAnalysis, onUserMove)
-  - static/panel.js    # analysis-panel render (eval/quality/best-move/PV)
-  - static/prefs.js    # ui-prefs read/write seam (chess-training:ui:v1)
+  - app/main.py         # single FastAPI entrypoint — all routes
+  - app/models.py       # shared Pydantic schemas
+  - static/index.html   # single SPA shell (tab buttons + panels + css links)
+  - static/app.js       # orchestrator; injects `api` into feature modules; tab array ~:1999
+  - static/review.js    # duplicate tab array ~:515; openGame/goto seams
+  - requirements.txt
 
 invariants:
-  - Server is stateless per request for play + opening/traps/repertoire trainers (move history lives client-side); ONLY game-review persists (SQLite data/games.db).
-  - One Stockfish process; all engine access serialized behind a single asyncio.Lock (SimpleEngine is not thread-safe). Import-safe if the binary is absent (EngineUnavailable).
-  - app/analysis.py, motifs.py, pgn.py, coaching.py, profile.py are PURE — unit-testable with no Stockfish binary; the full suite runs engine-free via the get_engine fake seam.
-  - Reuse analysis.pov_score_to_white_cp / classify — all evals are White-POV before classification; never re-derive the mover-sign rule.
-  - analyzeColor (Both/White/Black) 'both' MUST reproduce prior behavior bit-for-bit; the color-only skip must never add engine load beyond today.
-  - Tokens-only CSS (no raw hex); persist UI prefs only via the chess-training:ui:v1 key (prefs.js).
-  - User game data (data/games.db, data/games/) is gitignored — never commit it.
+  - Pure modules (analysis, motifs, pgn, coaching, profile, accuracy — and new insights,
+    endgame) stay engine-free: full pytest suite passes with no Stockfish binary.
+  - Reuse analysis.pov_score_to_white_cp / classify; never re-derive the White-POV
+    mover-sign rule.
+  - One Stockfish process, all access serialized behind a single asyncio.Lock;
+    engine.py stays import-safe when the binary is absent.
+  - Server stateless per request except game review (SQLite data/games.db);
+    never commit data/games.db or data/games/.
+  - Frontend modules receive an injected `api`; never import from app.js.
+    Tokens-only CSS (no raw hex), AA contrast, :focus-visible on interactive controls.
+  - No DB schema change unless a spec explicitly says so.
+  - Commit only implemented + verified + reviewed (Conventional Commits, ≤50-char subject,
+    Co-Authored-By trailer). Feature branches only; never push main, never force-push,
+    never merge PRs.
 
-auth:         local single-user tool; no external auth. (If an LLM is ever added: API key or claude CLI only — Max/Pro OAuth is ToS-blocked.)
+auth: none (local single-user app; no external services)
 
-hygiene:      no debug artifacts on commit (no console.log, window.__dbg, screenshots, .playwright-mcp/); Conventional Commits; never push to main.
+hygiene: no debug artifacts in commits (console.log, window.__dbg, screenshots, .playwright-mcp/)
