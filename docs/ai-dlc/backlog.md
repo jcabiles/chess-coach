@@ -6,6 +6,11 @@ single-user local tool — plus ideas surfaced while building the overhaul + mov
 
 Impact = value to the user · Effort = build + verify cost. Ordered by rough impact/effort.
 
+> **Now spec'd:** the **Insights / Analytics Dashboard** (openings / mistakes / endgames)
+> is designed in `specs/insights-dashboard.md` (+ `research/` + `tickets/`). It absorbs
+> item #13 (surface time-trouble from `%clk`) and keeps item #12 (Blunder Trainer → spaced
+> repetition) as an explicit out-of-scope Phase 4. Item #3 (eval graph) is adjacent.
+
 | # | Item | What it is | Impact | Effort | Notes / why deferred |
 |---|------|-----------|--------|--------|----------------------|
 | 1 | **Light / system theme** | A light mode + follow-OS / manual toggle, on top of the dark default. | M | M | Cheap now that colors are OKLCH tokens — flip a `[data-theme]` scope. Deferred: user runs dark; doubles visual test surface. |
