@@ -58,6 +58,7 @@ from app.models import (
     ImportResponse,
     LoadRequest,
     LoadResponse,
+    MistakesInsightsResponse,
     MoveRequest,
     MoveResponse,
     NarratedLeak,
@@ -840,6 +841,57 @@ async def get_insights_openings():
             },
         }
     return OpeningsInsightsResponse(**data)
+
+
+@app.get("/api/insights/mistakes", response_model=MistakesInsightsResponse)
+async def get_insights_mistakes():
+    """Return the Mistakes insights read-model (clusters, foreseeable, time-trouble, capitalization)."""
+    try:
+        data = insights.build_mistakes_insights()
+    except RuntimeError:
+        # Storage not initialised (edge case in tests or first boot before init).
+        empty_metric = {"value": None, "n": 0, "sufficient": False}
+        data = {
+            "coverage": {
+                "total": 0, "tagged": 0, "analyzed": 0, "pending": 0, "qualified": 0,
+            },
+            "clusters": {
+                "n_leaks": 0, "items": [],
+                "suppressed": {"cells": 0, "leaks": 0, "gate": insights.CLUSTER_GATE},
+            },
+            "foreseeable": {
+                "rate": empty_metric,
+                "dominant_motif": None,
+                "note": (
+                    "Foreseeable uses a narrow definition — it counts only warning "
+                    "signs visible at least two plies before the mistake. One-ply "
+                    "warnings cannot be distinguished from the pipeline's "
+                    "display-timing default, so the true rate is likely higher."
+                ),
+            },
+            "time_trouble": {
+                "clocked_games": 0, "unclocked_games": 0,
+                "baseline_rate": empty_metric,
+                # Mirror the real builder: all 4 buckets are always present,
+                # just zeroed out (labels sourced from insights._CLOCK_BUCKETS).
+                "buckets": [
+                    {"bucket": label, "moves": 0, "leaks": 0, "rate": None,
+                     "sufficient": False}
+                    for label, _, _ in insights._CLOCK_BUCKETS
+                ],
+                "note": "0 of 0 analyzed games have no clock data and are excluded.",
+            },
+            "capitalization": {
+                "winning_games": 0, "converted": 0,
+                "rate": empty_metric,
+                "note": (
+                    "A game counts as 'winning' when your win probability stayed "
+                    "at or above 80% for at least 4 consecutive plies — single-ply "
+                    "eval spikes do not count."
+                ),
+            },
+        }
+    return MistakesInsightsResponse(**data)
 
 
 # ---------------------------------------------------------------------------
