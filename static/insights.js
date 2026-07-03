@@ -5,18 +5,28 @@
 // app.js — mirrors review.js's one-directional contract). Copies small idioms
 // (el()) as module-private helpers rather than importing them from review.js.
 //
-// T1.5 — Openings panel: renders GET /api/insights/openings (win% by opening,
-// repertoire adherence, named-theory fallback). Data is fetched lazily, the
-// first time the Insights tab button is clicked (via the already-injected
-// api.mounts.tabs element — no new wiring added to app.js). Deep-links reuse
-// api.actions.openGameAtPly (T0.2). Phase 2/3 (mistakes/endgames) reuse
-// renderThinData() + the .insights-trend CSS class for their single
-// de-emphasized long-run trend slot.
+// Layout: the Insights tab hosts one internal sub-tab bar ("Openings" /
+// "Mistakes", Endgames to follow in Phase 3) rather than stacking all three
+// slices' full panels in one long scroll. Each slice has its own /api/insights/*
+// coverage line, so stacking would repeat "X of Y games analyzed…" once per
+// slice — a sub-tab switcher avoids that and scales cleanly as more phases
+// land. The sub-tabs are built lazily (see wireLazyLoad/buildShell below).
+//
+// Fetch strategy: per-section lazy, not "fetch everything on first open".
+// GET /api/insights/openings fires the first time the OUTER Insights tab is
+// shown (Openings is the default active sub-tab); GET /api/insights/mistakes
+// fires the first time the Mistakes sub-tab itself is clicked. Each fetch
+// happens at most once per page load.
+//
+// Deep-links reuse api.actions.openGameAtPly (T0.2). renderThinData() + the
+// .insights-trend CSS class are the shared honesty/min-sample convention
+// (T0.3) reused across every section below and by the upcoming Endgames slice.
 
 const byId = (id) => document.getElementById(id);
 
 let _api = null;
-let _loaded = false; // true once the openings fetch has been kicked off
+let _shellBuilt = false;   // true once the Openings/Mistakes sub-tab shell exists
+let _mistakesLoaded = false;
 
 function el(tag, attrs = {}, children = []) {
   const e = document.createElement(tag);
@@ -37,7 +47,7 @@ function fmt1(v, unit = '') {
 }
 
 function scorePct(score) {
-  return `${Math.round(score * 100)}%`;
+  return score == null ? '—' : `${Math.round(score * 100)}%`;
 }
 
 async function fetchJSON(url) {
@@ -61,24 +71,34 @@ function renderThinData(n, minSample = 5) {
   ]);
 }
 
+// A gated {value, n, sufficient} metric rendered as "label: value (n=N)",
+// muted with renderThinData() when insufficient. `value` is a plain number
+// (e.g. a ply count or a percentage already on a 0-100 scale) — formatted
+// via fmt1. Fraction-based rates (0-1) are rendered inline with scorePct()
+// instead, since their surrounding sentence needs more than "label: value".
+function renderGatedLine(label, metric, unit = '') {
+  const frag = document.createDocumentFragment();
+  frag.appendChild(el('p', { className: 'insights-metric-line' }, [`${label}: ${fmt1(metric.value, unit)} (n=${metric.n})`]));
+  if (!metric.sufficient) frag.appendChild(renderThinData(metric.n));
+  return frag;
+}
+
 // ---------------------------------------------------------------------------
 // Empty / loading states
 // ---------------------------------------------------------------------------
 
-function renderEmptyState(message) {
-  const root = byId('insights-root');
-  if (!root) return;
-  root.replaceChildren(
+function renderEmptyState(container, message) {
+  if (!container) return;
+  container.replaceChildren(
     el('div', { className: 'empty-state' }, [
       el('p', {}, [message || 'No insights yet — analyzed games will surface opening, mistake, and endgame diagnostics here.']),
     ])
   );
 }
 
-function renderLoading() {
-  const root = byId('insights-root');
-  if (!root) return;
-  root.replaceChildren(el('p', { className: 'insights-loading' }, ['Loading insights…']));
+function renderLoading(container) {
+  if (!container) return;
+  container.replaceChildren(el('p', { className: 'insights-loading' }, ['Loading insights…']));
 }
 
 // ---------------------------------------------------------------------------
@@ -101,7 +121,7 @@ function renderDeepLinkButton(gameId, ply, label) {
 }
 
 // ---------------------------------------------------------------------------
-// Win% by opening (family rows, expandable to per-line rows)
+// Openings — win% by opening (family rows, expandable to per-line rows)
 // ---------------------------------------------------------------------------
 
 function renderLineRow(line) {
@@ -167,15 +187,8 @@ function renderWinRates(winRates) {
 }
 
 // ---------------------------------------------------------------------------
-// Repertoire adherence
+// Openings — repertoire adherence
 // ---------------------------------------------------------------------------
-
-function renderGatedLine(label, metric, unit = '') {
-  const frag = document.createDocumentFragment();
-  frag.appendChild(el('p', { className: 'insights-metric-line' }, [`${label}: ${fmt1(metric.value, unit)} (n=${metric.n})`]));
-  if (!metric.sufficient) frag.appendChild(renderThinData(metric.n));
-  return frag;
-}
 
 function renderAdherenceLineRow(line) {
   const row = el('div', { className: 'insights-row' + (line.sufficient ? '' : ' insights-row-thin') });
@@ -231,7 +244,7 @@ function renderAdherence(adherence) {
 }
 
 // ---------------------------------------------------------------------------
-// Theory / soundness (off-repertoire games)
+// Openings — theory / soundness (off-repertoire games)
 // ---------------------------------------------------------------------------
 
 function renderTheoryGameRow(game) {
@@ -271,7 +284,145 @@ function renderTheory(theory) {
 }
 
 // ---------------------------------------------------------------------------
-// Panel assembly + fetch
+// Mistakes — ranked recurring-mistake clusters
+// ---------------------------------------------------------------------------
+
+// coaching.name_cluster appends its own " (N× so far)" suffix once count >= 5
+// (app/coaching.py:352-353) — strip it so our own appended "— {count}×" (the
+// styled, always-present count) is never doubled up.
+function clusterDisplayName(item) {
+  return item.name.replace(/\s*\(\d+× so far\)\s*$/, '');
+}
+
+function renderClusterRow(item) {
+  const row = el('div', { className: 'insights-row', 'data-category': item.category, 'data-phase': item.phase });
+  row.appendChild(el('span', { className: 'insights-row-name' }, [`${clusterDisplayName(item)} — ${item.count}×`]));
+  row.appendChild(renderDeepLinkButton(item.example.game_id, item.example.ply, `Open example (ply ${item.example.ply})`));
+  return row;
+}
+
+function renderClusters(clusters) {
+  const section = el('section', { className: 'insights-section', 'data-section': 'clusters' });
+  section.appendChild(el('h3', { className: 'eval-label' }, ['Recurring Mistakes']));
+
+  const items = (clusters && clusters.items) || [];
+  if (!items.length) {
+    section.appendChild(el('p', { className: 'insights-empty-note' }, ['No recurring-mistake clusters yet.']));
+    return section;
+  }
+
+  const list = el('div', { className: 'insights-cluster-list' });
+  items.forEach((item) => list.appendChild(renderClusterRow(item)));
+  section.appendChild(list);
+
+  const supp = clusters.suppressed;
+  if (supp && supp.cells > 0) {
+    // `gate` is landing on the API in parallel — fall back to today's backend
+    // constant (CLUSTER_GATE = 4, app/insights.py) until it's present.
+    const gate = supp.gate != null ? supp.gate : 4;
+    section.appendChild(el('p', { className: 'insights-empty-note' }, [
+      `${supp.cells} smaller pattern${supp.cells === 1 ? '' : 's'} (${supp.leaks} mistake${supp.leaks === 1 ? '' : 's'}) below the ${gate}-mistake naming threshold.`,
+    ]));
+  }
+
+  return section;
+}
+
+// ---------------------------------------------------------------------------
+// Mistakes — foreseeable-rate headline
+// ---------------------------------------------------------------------------
+
+function renderForeseeable(foreseeable) {
+  const section = el('section', { className: 'insights-section', 'data-section': 'foreseeable' });
+  section.appendChild(el('h3', { className: 'eval-label' }, ['Foreseeable Mistakes']));
+
+  if (!foreseeable || !foreseeable.rate) {
+    section.appendChild(el('p', { className: 'insights-empty-note' }, ['No foreseeable-rate data yet.']));
+    return section;
+  }
+
+  const rate = foreseeable.rate;
+  section.appendChild(el('p', { className: 'insights-metric-line' }, [`Foreseeable: ${scorePct(rate.value)} of mistakes had a warning sign (n=${rate.n}).`]));
+  if (!rate.sufficient) section.appendChild(renderThinData(rate.n));
+
+  if (foreseeable.dominant_motif) {
+    section.appendChild(el('p', { className: 'insights-metric-line' }, [`Most common warning sign: ${foreseeable.dominant_motif.replace(/_/g, ' ')}.`]));
+  }
+  if (foreseeable.note) section.appendChild(el('p', { className: 'insights-note' }, [foreseeable.note]));
+
+  return section;
+}
+
+// ---------------------------------------------------------------------------
+// Mistakes — time-trouble card
+// ---------------------------------------------------------------------------
+
+function renderTimeTroubleBucketRow(bucket) {
+  const row = el('div', { className: 'insights-row' + (bucket.sufficient ? '' : ' insights-row-thin'), 'data-bucket': bucket.bucket });
+  row.appendChild(el('span', { className: 'insights-row-name' }, [bucket.bucket]));
+  row.appendChild(el('span', {}, [scorePct(bucket.rate)]));
+  row.appendChild(el('span', {}, [`${bucket.leaks}/${bucket.moves} moves`]));
+  return row;
+}
+
+function renderTimeTrouble(tt) {
+  const section = el('section', { className: 'insights-section', 'data-section': 'time-trouble' });
+  section.appendChild(el('h3', { className: 'eval-label' }, ['Time Trouble']));
+
+  if (!tt) {
+    section.appendChild(el('p', { className: 'insights-empty-note' }, ['No clock data yet.']));
+    return section;
+  }
+
+  // The payoff: a prominent "<10s vs baseline" comparison, ahead of the
+  // full per-bucket breakdown.
+  const baseline = tt.baseline_rate;
+  const lowClock = (tt.buckets || []).find((b) => b.bucket === '<10s');
+  if (lowClock && lowClock.rate != null && baseline && baseline.value != null) {
+    section.appendChild(el('p', { className: 'insights-highlight' }, [
+      `Blunders when <10s left: ${scorePct(lowClock.rate)} vs ${scorePct(baseline.value)} baseline.`,
+    ]));
+    if (!baseline.sufficient) section.appendChild(renderThinData(baseline.n));
+  } else {
+    section.appendChild(el('p', { className: 'insights-empty-note' }, ['No moves with <10s on the clock yet.']));
+  }
+
+  const buckets = tt.buckets || [];
+  if (buckets.length) {
+    const list = el('div', { className: 'insights-tt-buckets' });
+    buckets.forEach((b) => list.appendChild(renderTimeTroubleBucketRow(b)));
+    section.appendChild(list);
+  }
+
+  if (tt.note) section.appendChild(el('p', { className: 'insights-note' }, [tt.note]));
+
+  return section;
+}
+
+// ---------------------------------------------------------------------------
+// Mistakes — advantage-capitalization card
+// ---------------------------------------------------------------------------
+
+function renderCapitalization(cap) {
+  const section = el('section', { className: 'insights-section', 'data-section': 'capitalization' });
+  section.appendChild(el('h3', { className: 'eval-label' }, ['Advantage Capitalization']));
+
+  if (!cap || !cap.winning_games) {
+    section.appendChild(el('p', { className: 'insights-empty-note' }, ['No sustained-advantage games yet.']));
+    return section;
+  }
+
+  section.appendChild(el('p', { className: 'insights-metric-line' }, [
+    `Converted ${cap.converted} of ${cap.winning_games} winning games (${scorePct(cap.rate.value)}).`,
+  ]));
+  if (!cap.rate.sufficient) section.appendChild(renderThinData(cap.rate.n));
+  if (cap.note) section.appendChild(el('p', { className: 'insights-note' }, [cap.note]));
+
+  return section;
+}
+
+// ---------------------------------------------------------------------------
+// Panel assembly + fetch — Openings
 // ---------------------------------------------------------------------------
 
 function renderCoverage(coverage) {
@@ -281,14 +432,15 @@ function renderCoverage(coverage) {
 }
 
 function renderOpeningsPanel(data) {
+  const root = byId('insights-panel-openings');
+  if (!root) return;
+
   const coverage = data && data.coverage;
   if (!coverage || !coverage.qualified) {
-    renderEmptyState('No analyzed, color-tagged games yet — analyze + tag a game to see openings insights.');
+    renderEmptyState(root, 'No analyzed, color-tagged games yet — analyze + tag a game to see openings insights.');
     return;
   }
 
-  const root = byId('insights-root');
-  if (!root) return;
   root.replaceChildren(
     renderCoverage(coverage),
     renderWinRates(data.win_rates),
@@ -298,15 +450,110 @@ function renderOpeningsPanel(data) {
 }
 
 async function loadOpenings() {
-  renderLoading();
+  const root = byId('insights-panel-openings');
+  renderLoading(root);
   try {
     const data = await fetchJSON('/api/insights/openings');
     renderOpeningsPanel(data);
   } catch (_) {
     // Degraded — an honest empty state, never a raw error (matches review.js's
     // fetch-failure precedent, e.g. loadTraps()).
-    renderEmptyState("Couldn't load insights right now.");
+    renderEmptyState(root, "Couldn't load insights right now.");
   }
+}
+
+// ---------------------------------------------------------------------------
+// Panel assembly + fetch — Mistakes
+// ---------------------------------------------------------------------------
+
+function renderMistakesPanel(data) {
+  const root = byId('insights-panel-mistakes');
+  if (!root) return;
+
+  const coverage = data && data.coverage;
+  if (!coverage || !coverage.qualified) {
+    renderEmptyState(root, 'No analyzed, color-tagged games yet — analyze + tag a game to see mistake diagnostics.');
+    return;
+  }
+
+  root.replaceChildren(
+    renderCoverage(coverage),
+    renderClusters(data.clusters),
+    renderForeseeable(data.foreseeable),
+    renderTimeTrouble(data.time_trouble),
+    renderCapitalization(data.capitalization),
+  );
+}
+
+async function loadMistakes() {
+  const root = byId('insights-panel-mistakes');
+  renderLoading(root);
+  try {
+    const data = await fetchJSON('/api/insights/mistakes');
+    renderMistakesPanel(data);
+  } catch (_) {
+    renderEmptyState(root, "Couldn't load insights right now.");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sub-tab shell (Openings / Mistakes) + lazy fetch wiring
+// ---------------------------------------------------------------------------
+
+// Builds the Openings/Mistakes sub-tab bar once, the first time the outer
+// Insights tab is shown. Sub-panels use role="tabpanel" + the `.is-active`
+// class specifically so they're hidden by style.css's existing generic rule
+// (`[role="tabpanel"]:not(.is-active) { display: none }`, style.css:435) —
+// no new show/hide CSS needed in insights.css.
+function buildShell() {
+  const root = byId('insights-root');
+  if (!root) return;
+
+  const tabs = el('div', { className: 'insights-subtabs', role: 'tablist', 'aria-label': 'Insights sections' });
+  const openingsTab = el('button', {
+    type: 'button', className: 'insights-subtab', role: 'tab', 'data-subtab': 'openings',
+    'aria-selected': 'true', 'aria-controls': 'insights-panel-openings', id: 'insights-subtab-openings',
+  }, ['Openings']);
+  const mistakesTab = el('button', {
+    type: 'button', className: 'insights-subtab', role: 'tab', 'data-subtab': 'mistakes',
+    'aria-selected': 'false', 'aria-controls': 'insights-panel-mistakes', id: 'insights-subtab-mistakes',
+  }, ['Mistakes']);
+  tabs.append(openingsTab, mistakesTab);
+
+  const openingsPanel = el('div', {
+    className: 'insights-subpanel is-active', role: 'tabpanel', id: 'insights-panel-openings',
+    'aria-labelledby': 'insights-subtab-openings',
+  });
+  const mistakesPanel = el('div', {
+    className: 'insights-subpanel', role: 'tabpanel', id: 'insights-panel-mistakes',
+    'aria-labelledby': 'insights-subtab-mistakes',
+  });
+  renderEmptyState(mistakesPanel, 'Click "Mistakes" to load mistake diagnostics.');
+
+  tabs.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-subtab]');
+    if (!btn) return;
+    const name = btn.dataset.subtab;
+    tabs.querySelectorAll('button[data-subtab]').forEach((b) => b.setAttribute('aria-selected', String(b === btn)));
+    openingsPanel.classList.toggle('is-active', name === 'openings');
+    mistakesPanel.classList.toggle('is-active', name === 'mistakes');
+    if (name === 'mistakes' && !_mistakesLoaded) {
+      _mistakesLoaded = true;
+      loadMistakes();
+    }
+  });
+
+  root.replaceChildren(tabs, openingsPanel, mistakesPanel);
+}
+
+// First activation of the OUTER Insights tab: build the sub-tab shell and
+// kick off the Openings fetch (the default active sub-tab). Mistakes fetches
+// separately, lazily, on its own first sub-tab click (see buildShell above).
+function activateInsightsTab() {
+  if (_shellBuilt) return;
+  _shellBuilt = true;
+  buildShell();
+  loadOpenings();
 }
 
 // Lazily fetch the first time the Insights tab is actually shown, using the
@@ -315,14 +562,12 @@ async function loadOpenings() {
 // so a click there would not actually reveal this panel either.
 function wireLazyLoad(api) {
   const tabsEl = api && api.mounts && api.mounts.tabs;
-  if (!tabsEl) { if (!_loaded) { _loaded = true; loadOpenings(); } return; }
+  if (!tabsEl) { activateInsightsTab(); return; }
   tabsEl.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-tab="insights"]');
     if (!btn) return;
     if (document.body.dataset.mode !== 'play') return;
-    if (_loaded) return;
-    _loaded = true;
-    loadOpenings();
+    activateInsightsTab();
   });
 }
 
@@ -332,7 +577,7 @@ function wireLazyLoad(api) {
 
 export function initInsights(api) {
   _api = api;
-  renderEmptyState(); // placeholder shown only until the first tab activation
+  renderEmptyState(byId('insights-root')); // placeholder shown only until the first tab activation
   wireLazyLoad(api);
 }
 
