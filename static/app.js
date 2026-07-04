@@ -1864,7 +1864,6 @@ function repBack() {
 
 function showReviewUI(on) {
   byId('review-bar').hidden = !on;
-  document.body.classList.toggle('review-mode', on);
   if (on) byId('trap-chip').hidden = true;
 }
 

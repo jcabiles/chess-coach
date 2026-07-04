@@ -321,6 +321,7 @@ function renderImportControls() {
   const textarea = el('textarea', {
     className: 'review-pgn-input',
     placeholder: 'Paste PGN text here (one or more games)…',
+    'aria-label': 'PGN text to import',
     rows: '5',
   });
 
@@ -340,7 +341,7 @@ function renderImportControls() {
   // Color override
   const colorRow = el('div', { className: 'review-import-options' });
   const colorLabel = el('label', { className: 'review-option-label', textContent: 'My color: ' });
-  const colorSel = el('select', { className: 'review-color-select' });
+  const colorSel = el('select', { className: 'review-color-select', 'aria-label': 'My color' });
   ['(auto-detect)', 'white', 'black'].forEach((v) => {
     const opt = document.createElement('option');
     opt.value = v === '(auto-detect)' ? '' : v;

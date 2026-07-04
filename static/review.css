@@ -1,6 +1,7 @@
 /* review.css — Review tab: game library, import, profile dashboard, foresight cards.
-   Tokens from style.css (:root). Follows panel.css / feedback.css conventions.
-   No raw hex — OKLCH only (matches the repo palette contract).
+   Tokens from style.css (:root + light theme). Follows panel.css /
+   feedback.css conventions. Tokens only — no raw color literals
+   (raw values live solely in the style.css token blocks).
    ------------------------------------------------------------------ */
 
 /* ==========================================================================
@@ -13,9 +14,16 @@
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   background: var(--surface-panel);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   margin-top: var(--space-3);
+}
+
+/* display:flex above out-specifies the UA [hidden] rule — mirror the explicit
+   guard the sibling bars carry (style.css .setup-bar/.trap-bar/.rep-bar). */
+.review-bar[hidden] {
+  display: none;
 }
 
 .review-bar-header {
@@ -176,7 +184,9 @@
    Tab-panel Review content (library + import + profile)
    ========================================================================== */
 
-#tab-review {
+/* Scoped to .is-active: a bare #tab-review ID selector out-specifies the generic
+   [role="tabpanel"]:not(.is-active) hide rule and leaks this panel into every tab. */
+#tab-review.is-active {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -233,7 +243,9 @@
   gap: var(--space-2);
   padding: var(--space-3);
   background: var(--surface-raised);
-  border: 1px solid var(--border-subtle);
+  /* Transparent resting border: elevation + gap do the grouping;
+     the 1px slot stays so the hover outline doesn't shift layout. */
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   transition: border-color var(--motion-fast) var(--ease-out);
 }
@@ -278,9 +290,9 @@
   border-radius: var(--radius-sm);
 }
 
-.review-badge-win   { color: var(--q-best); background: oklch(18% 0.05 145); }
-.review-badge-loss  { color: var(--q-blunder); background: oklch(18% 0.05 22); }
-.review-badge-draw  { color: var(--q-inaccuracy); background: oklch(18% 0.05 85); }
+.review-badge-win   { color: var(--q-best); background: var(--q-best-dim); }
+.review-badge-loss  { color: var(--q-blunder); background: var(--q-blunder-dim); }
+.review-badge-draw  { color: var(--q-inaccuracy); background: var(--q-inaccuracy-dim); }
 
 .review-status {
   font-size: 0.72rem;
@@ -343,17 +355,17 @@
 }
 
 .review-btn-primary:hover:not(:disabled) {
-  background: oklch(25% 0.09 231);
+  background: var(--accent-dim-hover);
 }
 
 .review-btn-danger {
   color: var(--q-blunder);
-  border-color: oklch(32% 0.07 22);
+  border-color: var(--q-blunder-border);
 }
 
 .review-btn-danger:hover:not(:disabled) {
   border-color: var(--q-blunder);
-  background: oklch(18% 0.05 22);
+  background: var(--q-blunder-dim);
 }
 
 /* File-input label styled as a button */
@@ -381,8 +393,8 @@ input[type="file"].review-file-input {
   gap: var(--space-2);
   padding: var(--space-3);
   background: var(--surface-raised);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
   margin-bottom: var(--space-3);
 }
 
@@ -408,8 +420,9 @@ input[type="file"].review-file-input {
   transition: border-color var(--motion-fast) var(--ease-out);
 }
 
-.review-pgn-input:focus {
-  outline: none;
+.review-pgn-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
   border-color: var(--accent);
 }
 
@@ -445,9 +458,10 @@ input[type="file"].review-file-input {
   cursor: pointer;
 }
 
-.review-color-select:focus {
+.review-color-select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+  border-color: var(--accent);
 }
 
 .review-import-status {
@@ -490,7 +504,6 @@ input[type="file"].review-file-input {
   flex: 1;
   min-width: 100px;
   background: var(--surface-raised);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: var(--space-3);
   display: flex;
@@ -533,7 +546,6 @@ input[type="file"].review-file-input {
   padding: var(--space-2) var(--space-3);
   background: var(--surface-raised);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
 }
 
 .review-leak-category {
@@ -570,7 +582,6 @@ input[type="file"].review-file-input {
   padding: var(--space-1) var(--space-3);
   background: var(--surface-raised);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
 }
 
 .review-phase-name {
@@ -633,7 +644,6 @@ input[type="file"].review-file-input {
   gap: var(--space-1);
   padding: var(--space-2);
   background: var(--surface-raised);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   min-width: 60px;
 }
@@ -661,8 +671,8 @@ input[type="file"].review-file-input {
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
   background: var(--surface-raised);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
   margin-bottom: var(--space-3);
 }
 
@@ -701,8 +711,8 @@ input[type="file"].review-file-input {
   gap: var(--space-3);
   padding: var(--space-3);
   background: var(--surface-raised);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
   margin-bottom: var(--space-3);
 }
 
@@ -731,8 +741,9 @@ input[type="file"].review-file-input {
   transition: border-color var(--motion-fast) var(--ease-out);
 }
 
-.review-bulk-input:focus {
-  outline: none;
+.review-bulk-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
   border-color: var(--accent);
 }
 
@@ -787,7 +798,7 @@ input[type="file"].review-file-input {
   border-radius: var(--radius-sm);
   color: var(--text);
   font-size: 0.82rem;
-  box-shadow: 0 2px 8px oklch(0% 0 0 / 0.35);
+  box-shadow: var(--shadow-toast);
   animation: review-toast-in var(--motion-fast) var(--ease-out);
   pointer-events: none;
 }
@@ -800,6 +811,16 @@ input[type="file"].review-file-input {
 @keyframes review-toast-in {
   from { opacity: 0; transform: translateY(-6px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Reduced-motion: skip the slide-in — toast appears in place.
+   (style.css zeroes animation-duration globally, but @keyframes
+   animations get their own explicit override here, matching
+   feedback.css.) */
+@media (prefers-reduced-motion: reduce) {
+  .review-toast {
+    animation: none;
+  }
 }
 
 /* ==========================================================================
@@ -828,7 +849,6 @@ input[type="file"].review-file-input {
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
   background: var(--surface-raised);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
 }
 
