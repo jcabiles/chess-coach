@@ -1,9 +1,11 @@
 """
-tests/test_insights_api.py — API tests for GET /api/insights/openings (T1.4).
+tests/test_insights_api.py — API tests for the Insights routes.
+
+Covers GET /api/insights/openings (T1.4) and GET /api/insights/mistakes (T2.5).
 
 Mirrors tests/test_games_api.py's fixture idiom: fresh temp DB per test via
 GAMES_DB + storage.init(), real FastAPI lifespan through TestClient (no engine
-calls on this route, so no fake-engine override is needed).
+calls on either route, so no fake-engine override is needed).
 
 The real lifespan loads the bundled data/repertoire.json + data/book.json,
 which would make adherence/theory routing depend on production content. To
@@ -26,7 +28,9 @@ from fastapi.testclient import TestClient
 
 import app.storage as storage
 from app import book, repertoire
+from app.insights import CLUSTER_GATE
 from app.main import app
+from app.storage import LeakRecord
 
 MISSING = "tests/fixtures/does_not_exist.json"
 BOOK_FIXTURE = "tests/fixtures/book_sample.json"  # firstMoves = ["e2e4"]
@@ -65,12 +69,13 @@ def _insert_game(
     eco: str | None = None,
     result: str | None = "1-0",
     analysis_status: str = "done",
+    imported_at: str = "2026-01-15T10:00:00",
 ) -> int:
     return storage.insert_game(
         {
             "content_hash": content_hash,
             "pgn": '[Event "?"]\n1. e4 e5 *',
-            "imported_at": "2026-01-15T10:00:00",
+            "imported_at": imported_at,
             "white": "Alice",
             "black": "Bob",
             "result": result,
@@ -82,7 +87,7 @@ def _insert_game(
     )
 
 
-def _plies_from_san(sans: list[str]) -> list[dict]:
+def _plies_from_san(sans: list[str], win_probs: list[float] | None = None) -> list[dict]:
     """Replay SAN moves from the start into game_plies-shaped dicts (1-based)."""
     b = chess.Board()
     rows = []
@@ -95,9 +100,35 @@ def _plies_from_san(sans: list[str]) -> list[dict]:
             "uci": move.uci(),
             "fen_before": fen_before,
             "eval_cp_white": 20,
+            "win_prob": win_probs[i] if win_probs else None,
         })
         b.push(move)
     return rows
+
+
+def _make_leak(
+    game_id: int,
+    *,
+    ply: int = 20,
+    color: str = "white",
+    category: str = "hanging",
+    phase: str = "middlegame",
+    lead_in_ply: int | None = None,
+    threat_motif: str | None = None,
+) -> LeakRecord:
+    return LeakRecord(
+        game_id=game_id,
+        ply=ply,
+        color=color,
+        severity="blunder",
+        category=category,
+        phase=phase,
+        win_prob_before=0.65,
+        win_prob_after=0.35,
+        win_prob_drop=0.30,
+        lead_in_ply=lead_in_ply,
+        threat_motif=threat_motif,
+    )
 
 
 def _load_repertoire(tmp_path: Path) -> None:
@@ -218,3 +249,113 @@ def test_only_unqualified_games_still_empty(client):
     assert body["win_rates"]["families"] == []
     assert body["adherence"]["n"] == 0
     assert body["theory"]["n"] == 0
+
+
+# ---------------------------------------------------------------------------
+# GET /api/insights/mistakes (T2.5)
+# ---------------------------------------------------------------------------
+
+
+def test_mistakes_populated_sections(client):
+    """200 with clusters, foreseeable, time_trouble, capitalization populated."""
+    gid = _insert_game(content_hash="m1", my_color="white", result="1-0")
+    storage.write_leaks(gid, [
+        _make_leak(gid, ply=10, lead_in_ply=8, threat_motif="knight_fork"),
+        _make_leak(gid, ply=12, lead_in_ply=10, threat_motif="knight_fork"),
+        _make_leak(gid, ply=14),
+        _make_leak(gid, ply=16),
+    ])
+    storage.write_plies(gid, [
+        {"ply": 1, "is_user_move": True, "clock_centis": 500},    # <10s bucket
+        {"ply": 3, "is_user_move": True, "clock_centis": 20000},  # >2m bucket
+    ])
+
+    # A second, sustained-winning game for capitalization.
+    gid2 = _insert_game(content_hash="m2", my_color="white", result="1-0")
+    storage.write_plies(gid2, _plies_from_san(
+        ["e4", "e5", "Nf3", "Nc6", "Bb5"], win_probs=[0.9, 0.1, 0.9, 0.1, 0.9]))
+
+    resp = client.get("/api/insights/mistakes")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body["coverage"]["qualified"] == 2
+
+    clusters = body["clusters"]
+    assert clusters["n_leaks"] == 4
+    items = clusters["items"]
+    assert len(items) == 1
+    assert items[0]["category"] == "hanging"
+    assert items[0]["count"] == 4
+    assert items[0]["name"]  # non-empty human name
+    assert items[0]["example"] == {"game_id": gid, "ply": 16}
+    assert clusters["suppressed"] == {"cells": 0, "leaks": 0, "gate": CLUSTER_GATE}
+
+    fore = body["foreseeable"]
+    assert fore["rate"] == {"value": 0.5, "n": 4, "sufficient": False}
+    assert fore["dominant_motif"] == "knight_fork"
+    assert "narrow definition" in fore["note"]
+
+    tt = body["time_trouble"]
+    assert tt["clocked_games"] == 1
+    assert tt["unclocked_games"] == 1
+    by_label = {b["bucket"]: b for b in tt["buckets"]}
+    assert set(by_label) == {"<10s", "10s-30s", "30s-2m", ">2m"}
+    assert by_label["<10s"]["moves"] == 1
+    assert by_label[">2m"]["moves"] == 1
+
+    cap = body["capitalization"]
+    assert cap["winning_games"] == 1
+    assert cap["converted"] == 1
+    assert cap["rate"] == {"value": 1.0, "n": 1, "sufficient": False}
+    assert "single-ply" in cap["note"]
+
+
+def test_mistakes_empty_db_returns_empty_safe_shape(client):
+    """200 with every section empty-safe when no games/leaks exist."""
+    resp = client.get("/api/insights/mistakes")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body["coverage"] == {
+        "total": 0, "tagged": 0, "analyzed": 0, "pending": 0, "qualified": 0,
+    }
+    clusters = body["clusters"]
+    assert clusters["n_leaks"] == 0
+    assert clusters["items"] == []
+    assert clusters["suppressed"] == {"cells": 0, "leaks": 0, "gate": CLUSTER_GATE}
+    fore = body["foreseeable"]
+    assert fore["rate"] == {"value": None, "n": 0, "sufficient": False}
+    assert fore["dominant_motif"] is None
+    assert fore["note"]
+    tt = body["time_trouble"]
+    assert tt["clocked_games"] == 0
+    assert tt["unclocked_games"] == 0
+    assert tt["baseline_rate"] == {"value": None, "n": 0, "sufficient": False}
+    assert len(tt["buckets"]) == 4  # all four buckets always present
+    assert all(b["rate"] is None for b in tt["buckets"])
+    assert tt["note"]
+    cap = body["capitalization"]
+    assert cap == {
+        "winning_games": 0, "converted": 0,
+        "rate": {"value": None, "n": 0, "sufficient": False},
+        "note": cap["note"],
+    }
+    assert cap["note"]
+
+
+def test_mistakes_cluster_item_example_round_trips(client):
+    """A cluster item's example carries the exact game_id/ply of a real leak."""
+    gid_a = _insert_game(content_hash="ex1", imported_at="2026-01-10T10:00:00")
+    gid_b = _insert_game(content_hash="ex2", imported_at="2026-01-20T10:00:00")
+    storage.write_leaks(gid_a, [_make_leak(gid_a, ply=p) for p in (10, 12)])
+    storage.write_leaks(gid_b, [_make_leak(gid_b, ply=p) for p in (20, 22)])
+
+    resp = client.get("/api/insights/mistakes")
+    assert resp.status_code == 200
+    items = resp.json()["clusters"]["items"]
+    assert len(items) == 1
+    example = items[0]["example"]
+    # Most recent import (game B), highest ply within it — proves the nested
+    # ClusterExample model round-trips game_id/ply, not just aggregate counts.
+    assert example == {"game_id": gid_b, "ply": 22}

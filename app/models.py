@@ -549,6 +549,125 @@ class OpeningsInsightsResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Insights — Mistakes slice (additive; app/insights.py::build_mistakes_insights)
+# ---------------------------------------------------------------------------
+
+
+class InsightsMistakesCoverage(BaseModel):
+    """How many games feed the Mistakes insights.
+
+    Unlike ``InsightsCoverage`` (Openings), this has no repertoire routing —
+    Mistakes is gated the same way (my_color set + analysis_status='done')
+    but doesn't split games by on/off-repertoire.
+    """
+
+    total: int = Field(description="Total number of game rows.")
+    tagged: int = Field(description="Games with my_color set.")
+    analyzed: int = Field(description="Games with analysis_status='done'.")
+    pending: int = Field(description="Games with analysis_status='pending'.")
+    qualified: int = Field(
+        description="Games with my_color set AND analysis_status='done' — the "
+        "population every Mistakes section is computed from."
+    )
+
+
+class InsightsClusterExample(BaseModel):
+    """A representative leak for deep-linking into a cluster's replay."""
+
+    game_id: int
+    ply: int
+
+
+class InsightsClusterItem(BaseModel):
+    """One recurring-mistake cluster, grouped by (category, phase)."""
+
+    category: str
+    phase: str
+    name: str = Field(description="Human-readable cluster name (coaching.name_cluster).")
+    count: int = Field(description="Number of leaks in this cluster.")
+    example: InsightsClusterExample = Field(
+        description="Most recent leak in the cluster, for deep-linking."
+    )
+
+
+class InsightsClusterSuppressed(BaseModel):
+    """Cells dropped from ``items`` for falling below CLUSTER_GATE."""
+
+    cells: int = Field(description="Number of (category, phase) cells suppressed.")
+    leaks: int = Field(description="Total leaks in the suppressed cells.")
+    gate: int = Field(description="Min leak count a cluster needs to appear in items.")
+
+
+class InsightsClusters(BaseModel):
+    """Recurring-mistake clusters section."""
+
+    n_leaks: int = Field(description="Total qualified leaks across all games.")
+    items: list[InsightsClusterItem] = Field(default_factory=list)
+    suppressed: InsightsClusterSuppressed
+
+
+class InsightsForeseeable(BaseModel):
+    """Foreseeable-rate section: fraction of leaks with a prior warning sign.
+
+    ``rate``'s denominator is ALL qualified leaks (not just clustered ones) —
+    a deliberate honest under-claim; do not re-derive it from ``clusters``.
+    """
+
+    rate: InsightsGatedMetric
+    dominant_motif: str | None = Field(
+        default=None, description="Most common threat_motif among foreseeable "
+        "leaks; None when none carry one."
+    )
+    note: str = Field(description="Caveat: a narrow, engine-visible definition of foreseeable.")
+
+
+class InsightsTimeTroubleBucket(BaseModel):
+    """One remaining-clock bucket's blunder rate."""
+
+    bucket: str = Field(description="Clock bucket label, e.g. '<10s', '10s-30s'.")
+    moves: int = Field(description="User moves with a clock reading in this bucket.")
+    leaks: int = Field(description="Leaks landing on those moves.")
+    rate: float | None = Field(
+        default=None, description="leaks / moves for this bucket; None when moves=0."
+    )
+    sufficient: bool = Field(description="True when moves >= the min-sample threshold.")
+
+
+class InsightsTimeTrouble(BaseModel):
+    """Time-trouble section: blunder rate by remaining clock, vs. baseline."""
+
+    clocked_games: int = Field(description="Qualified games with clock data.")
+    unclocked_games: int = Field(description="Qualified games with no clock data (excluded).")
+    baseline_rate: InsightsGatedMetric = Field(
+        description="Leak rate over all clocked user moves, for comparison."
+    )
+    buckets: list[InsightsTimeTroubleBucket] = Field(default_factory=list)
+    note: str = Field(description="States how many analyzed games lack clock data.")
+
+
+class InsightsCapitalization(BaseModel):
+    """Advantage-capitalization section: converted% of sustained winning games."""
+
+    winning_games: int = Field(
+        description="Games with a sustained winning stretch (win_prob >= 0.8 for "
+        ">= 4 consecutive plies)."
+    )
+    converted: int = Field(description="Of those, the games the user actually won.")
+    rate: InsightsGatedMetric
+    note: str = Field(description="Defines 'winning' as a sustained stretch, not a spike.")
+
+
+class MistakesInsightsResponse(BaseModel):
+    """Response for ``GET /api/insights/mistakes``."""
+
+    coverage: InsightsMistakesCoverage
+    clusters: InsightsClusters
+    foreseeable: InsightsForeseeable
+    time_trouble: InsightsTimeTrouble
+    capitalization: InsightsCapitalization
+
+
+# ---------------------------------------------------------------------------
 # Color-tagging + bulk-analyze models (additive)
 # ---------------------------------------------------------------------------
 
