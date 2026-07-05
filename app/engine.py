@@ -1,4 +1,4 @@
-"""Stockfish engine wrapper for the chess-training FastAPI app.
+"""Stockfish engine wrapper for the chess-trainer FastAPI app.
 
 This module owns the lifecycle of a SINGLE Stockfish UCI process and exposes a
 safe async surface for analyzing positions.

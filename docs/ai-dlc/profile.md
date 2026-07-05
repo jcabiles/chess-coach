@@ -1,4 +1,4 @@
-# AI-DLC profile — chess-training
+# AI-DLC profile — chess-trainer
 
 stack:        python (FastAPI + python-chess backend; vanilla ES-module frontend, no build step)
 artifact_dir: docs/ai-dlc
