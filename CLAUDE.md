@@ -71,8 +71,15 @@ Commit only after a change is **implemented, verified, and reviewed** — never 
 End every message with:
 `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
 
-One logical change per commit. Never `git push` unless asked. If verification
-fails or was skipped — say so and don't commit.
+**Before creating any new branch:** `git fetch origin` then `git status -sb`
+(or `git log main..origin/main`) to confirm local `main` matches `origin/main`.
+If behind, `git pull` (or `git merge origin/main`) before branching — never
+branch off stale local `main`, it causes avoidable conflicts/merge noise later.
+
+One logical change per commit. Claude may `git push` and open PRs (`gh pr
+create`) autonomously on feature branches (not `main`) without asking first;
+never force-push, never merge a PR, never push directly to `main`. If
+verification fails or was skipped — say so and don't commit.
 
 ## Environment notes
 
