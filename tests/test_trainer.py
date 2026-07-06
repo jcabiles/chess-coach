@@ -289,6 +289,66 @@ class TestAssembleSession:
 
 
 # ---------------------------------------------------------------------------
+# assemble_session(practice=True) — off-schedule serve, zero schedule impact
+# ---------------------------------------------------------------------------
+
+class TestPracticeSession:
+    def test_practice_serves_non_due_buckets(self, tmp_path):
+        """Nothing due → the due serve is empty but practice serves the pool."""
+        _init(tmp_path)
+        gid = _qualified_game()
+        _seed_puzzles(gid, [{"ply": 1, "motif": "fork"},
+                            {"ply": 2, "motif": "pin"}])
+        storage.upsert_trainer_box("fork", box=5, last_reviewed=TODAY.isoformat())
+        storage.upsert_trainer_box("pin", box=5, last_reviewed=TODAY.isoformat())
+        assert trainer.assemble_session(TODAY) == {"buckets": [], "puzzles": []}
+        session = trainer.assemble_session(TODAY, practice=True)
+        assert sorted(b["motif"] for b in session["buckets"]) == ["fork", "pin"]
+        assert len(session["puzzles"]) == 2
+
+    def test_practice_is_a_superset_of_due(self, tmp_path):
+        """Due AND not-due buckets are both served in a practice session."""
+        _init(tmp_path)
+        gid = _qualified_game()
+        _seed_puzzles(gid, [{"ply": 1, "motif": "fork"},
+                            {"ply": 2, "motif": "pin"}])
+        storage.upsert_trainer_box("pin", box=5, last_reviewed=TODAY.isoformat())
+        session = trainer.assemble_session(TODAY, practice=True)  # fork is due
+        assert sorted(b["motif"] for b in session["buckets"]) == ["fork", "pin"]
+
+    def test_practice_serve_leaves_schedule_untouched(self, tmp_path):
+        """Only cursor_key moves — box and last_reviewed pass through, and the
+        bucket is exactly as (not-)due after the practice serve as before."""
+        _init(tmp_path)
+        gid = _qualified_game()
+        _seed_puzzles(gid, [{"ply": p, "motif": "fork"} for p in (1, 2, 3)])
+        storage.upsert_trainer_box("fork", box=3, last_reviewed=TODAY.isoformat())
+        trainer.assemble_session(TODAY, practice=True)
+        assert storage.get_trainer_boxes() == [{
+            "motif": "fork", "box": 3, "last_reviewed": TODAY.isoformat(),
+            "cursor_key": f"{gid}:3:fork",
+        }]
+        assert trainer.assemble_session(TODAY) == {"buckets": [], "puzzles": []}
+
+    def test_practice_rotation_advances(self, tmp_path):
+        """Consecutive practice serves walk the bucket like due serves do."""
+        _init(tmp_path)
+        gid = _qualified_game()
+        _seed_puzzles(gid, [{"ply": p, "motif": "fork"} for p in (1, 2, 3, 4, 5)])
+        storage.upsert_trainer_box("fork", box=5, last_reviewed=TODAY.isoformat())
+        first = trainer.assemble_session(TODAY, practice=True)
+        second = trainer.assemble_session(TODAY, practice=True)
+        served = [p["ply"] for p in first["puzzles"] + second["puzzles"]]
+        assert served == [1, 2, 3, 4, 5, 1]
+
+    def test_practice_on_empty_pool_is_empty(self, tmp_path):
+        _init(tmp_path)
+        assert trainer.assemble_session(TODAY, practice=True) == {
+            "buckets": [], "puzzles": [],
+        }
+
+
+# ---------------------------------------------------------------------------
 # preview_due_buckets — idempotent peek (no serving, no cursor movement)
 # ---------------------------------------------------------------------------
 

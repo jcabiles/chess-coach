@@ -239,7 +239,9 @@ def preview_due_buckets(today: Optional[date | str] = None) -> list[dict]:
     ]
 
 
-def assemble_session(today: Optional[date | str] = None) -> dict:
+def assemble_session(
+    today: Optional[date | str] = None, practice: bool = False
+) -> dict:
     """Assemble today's training session and advance rotation cursors.
 
     MUTATING serve — every call advances each served bucket's cursor_key.
@@ -250,19 +252,26 @@ def assemble_session(today: Optional[date | str] = None) -> dict:
          qualifying leaks is reset (box 1, last_reviewed/cursor cleared) —
          stale box-5 schedules must not apply to a future weakness pool.
       2. Due buckets: every pool bucket whose box row says due (a bucket with
-         no row is box 1, never reviewed — due).
-      3. Candidates: the next <= PER_BUCKET_CAP puzzles per due bucket in
+         no row is box 1, never reviewed — due).  With ``practice=True``,
+         ALL live-pool buckets qualify instead — an off-schedule extra-reps
+         serve.  Practice is schedule-neutral by construction: the only
+         write below is the cursor upsert (step 5), which passes box and
+         last_reviewed through unchanged, and box moves/review stamps happen
+         solely in :func:`complete_bucket_review`, which practice sessions
+         never invoke (the client skips bucket-complete when the serve
+         response says practice).
+      3. Candidates: the next <= PER_BUCKET_CAP puzzles per served bucket in
          rotation order after cursor_key.
-      4. Selection: reserve >= 1 slot per due bucket FIRST, then fill the
+      4. Selection: reserve >= 1 slot per served bucket FIRST, then fill the
          remaining capacity hardest-first (win_prob_drop desc) across each
          bucket's next-in-rotation candidate — prefix-constrained, so a
          bucket's rotation order is never skipped over; cap SESSION_CAP.
       5. Cursors: each served bucket's cursor_key advances to its last-served
          puzzle (persisted via storage.upsert_trainer_box).
 
-    Returns ``{"buckets": [...], "puzzles": [...]}`` — served due-bucket
+    Returns ``{"buckets": [...], "puzzles": [...]}`` — served bucket
     summaries and the served puzzles (grouped by bucket, rotation order).
-    Zero pool / zero due buckets yields explicit empty lists.
+    Zero pool / zero qualifying buckets yields explicit empty lists.
     """
     if today is None:
         today = date.today()
@@ -273,25 +282,30 @@ def assemble_session(today: Optional[date | str] = None) -> dict:
     # 1. Box hygiene — reset rows whose motif pool is empty.
     _reset_empty_boxes(pool, boxes)
 
-    # 2. Due buckets, in deterministic (motif) order.
-    due = [s for s in _bucket_states(pool, boxes, today) if s["due"]]
-    due = due[:SESSION_CAP]  # a reserved slot per due bucket must fit the cap
+    # 2. Buckets to serve, in deterministic (motif) order.
+    states = _bucket_states(pool, boxes, today)
+    serving = states if practice else [s for s in states if s["due"]]
+    # A reserved slot per served bucket must fit the cap.  In practice mode
+    # this also caps "all buckets" at SESSION_CAP — fine while the motif
+    # vocabulary (9 values today) stays under the cap; buckets past it would
+    # be silently unreachable in practice serves.
+    serving = serving[:SESSION_CAP]
 
-    # 3. Rotation candidates per due bucket.
+    # 3. Rotation candidates per served bucket.
     candidates = {
         b["motif"]: _rotate(pool[b["motif"]], b["cursor_key"], PER_BUCKET_CAP)
-        for b in due
+        for b in serving
     }
 
-    # 4. Reserve one slot per due bucket first (refuter: a pure global
+    # 4. Reserve one slot per served bucket first (refuter: a pure global
     # hardest-first trim can starve an easier bucket forever), then fill the
     # remaining capacity hardest-first across buckets' next candidates.
-    served_count = {b["motif"]: 1 for b in due}
-    capacity = SESSION_CAP - len(due)
+    served_count = {b["motif"]: 1 for b in serving}
+    capacity = SESSION_CAP - len(serving)
     while capacity > 0:
         hardest: Optional[str] = None
         hardest_drop = -1.0
-        for b in due:  # due order breaks ties deterministically
+        for b in serving:  # motif order breaks ties deterministically
             motif = b["motif"]
             idx = served_count[motif]
             if idx < len(candidates[motif]):
@@ -299,7 +313,7 @@ def assemble_session(today: Optional[date | str] = None) -> dict:
                 if drop > hardest_drop:
                     hardest, hardest_drop = motif, drop
         if hardest is None:
-            break  # every due bucket's candidates are exhausted
+            break  # every served bucket's candidates are exhausted
         served_count[hardest] += 1
         capacity -= 1
 
@@ -307,7 +321,7 @@ def assemble_session(today: Optional[date | str] = None) -> dict:
     # last-served puzzle.
     puzzles: list[dict] = []
     buckets: list[dict] = []
-    for b in due:
+    for b in serving:
         motif = b["motif"]
         picked = candidates[motif][: served_count[motif]]
         puzzles.extend(picked)
