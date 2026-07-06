@@ -20,6 +20,15 @@ def test_static_app_js_is_no_store():
         assert resp.headers.get("cache-control") == "no-store"
 
 
+def test_spa_shell_is_no_store():
+    """The SPA shell at / is no-store too — stale index.html markup must never
+    pair with fresh /static JS (DOM-id mismatch)."""
+    with TestClient(app) as client:
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert resp.headers.get("cache-control") == "no-store"
+
+
 def test_static_not_modified_is_no_store():
     """The 304 Not-Modified path also carries the no-store header.
 
