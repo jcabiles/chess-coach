@@ -10,7 +10,10 @@
 //     per click — every call burns rotation), then drills the returned
 //     puzzles: board at fen_before oriented to your color, your move is
 //     verdict-checked server-side (POST /api/trainer/check), failed gets ONE
-//     retry, a second fail auto-reveals with narration.
+//     retry, a second fail auto-reveals with narration. When nothing is due
+//     the server serves a PRACTICE session instead (response.practice=true,
+//     authoritative): same drill, but bucket-complete is never posted so the
+//     Leitner schedule is untouched.
 //
 // Drill state machine (drill.phase):
 //   'moving'    — board armed, waiting for your move (attempts 0 or 1).
@@ -99,11 +102,20 @@ async function refreshTrainSection() {
     return;
   }
 
+  // Always startable when there are puzzles at all: due buckets get the
+  // normal review serve; otherwise the SERVER falls back to a practice
+  // serve (zero schedule impact). The label is cosmetic — the server
+  // classifies at serve time, so a stale label can't mis-file a session.
   const dueCount = buckets.filter((b) => b.due).length;
-  start.disabled = dueCount === 0;
-  start.title = dueCount
-    ? `Serve today's puzzles (${dueCount} bucket${dueCount === 1 ? '' : 's'} due)`
-    : 'Nothing due today — come back tomorrow';
+  start.disabled = false;
+  if (dueCount) {
+    start.textContent = 'Start training';
+    start.title =
+      `Serve today's puzzles (${dueCount} bucket${dueCount === 1 ? '' : 's'} due)`;
+  } else {
+    start.textContent = 'Practice';
+    start.title = "Extra practice — doesn't affect your review schedule";
+  }
 
   const list = document.createElement('div');
   list.className = 'trainer-buckets';
@@ -270,7 +282,7 @@ async function startSession() {
   const puzzles = (data && data.puzzles) || [];
   if (!puzzles.length) {
     if (btn) btn.disabled = false;
-    _api.emit('toast:show', 'Nothing due right now.');
+    _api.emit('toast:show', 'No puzzles available right now.');
     refreshTrainSection();
     return;
   }
@@ -287,6 +299,10 @@ async function startSession() {
 
   drill = {
     puzzles,
+    // AUTHORITATIVE from the server (decided at serve time, never guessed
+    // client-side): practice sessions skip the bucket-complete flush so the
+    // Leitner schedule is untouched.
+    practice: !!(data && data.practice),
     index: 0,
     board: null,
     orientation: 'white',
@@ -315,7 +331,8 @@ function loadPuzzle() {
       : drill.board.turn;
 
   byId('trainer-title').textContent =
-    `Blunder Drill — ${drill.index + 1}/${drill.puzzles.length} · ${bucketLabel(puzzle.bucket)}`;
+    `Blunder Drill${drill.practice ? ' (practice)' : ''} — ` +
+    `${drill.index + 1}/${drill.puzzles.length} · ${bucketLabel(puzzle.bucket)}`;
   setMoveHint('Your move — find the better continuation.');
   setNote(
     `From one of your games: you played a ${puzzle.severity} here. ` +
@@ -499,10 +516,18 @@ function endSession() {
 
   const total = drill.results.filter(Boolean).length;
   const solved = drill.results.filter((o) => o === 'solved' || o === 'solved_alt').length;
-  byId('trainer-title').textContent = 'Blunder Drill — session complete';
+  byId('trainer-title').textContent =
+    `Blunder Drill${drill.practice ? ' (practice)' : ''} — session complete`;
   setMoveHint('');
-  setNote('Return to your game, or start another session from the Review tab.');
-  setFeedback(`Session complete — ${solved}/${total} solved.`, solved > 0 ? 'good' : null);
+  setNote(
+    drill.practice
+      ? 'Your review schedule is unchanged. Return to your game, or practice again from the Review tab.'
+      : 'Return to your game, or start another session from the Review tab.'
+  );
+  setFeedback(
+    `${drill.practice ? 'Practice' : 'Session'} complete — ${solved}/${total} solved.`,
+    solved > 0 ? 'good' : null
+  );
   setNarration(null);
 
   flushOutcomes(); // fire-and-forget; guarded against double-flush
@@ -515,6 +540,12 @@ function endSession() {
 function flushOutcomes() {
   if (!drill || drill.flushed) return;
   drill.flushed = true;
+  // Practice sessions NEVER post bucket-complete — zero schedule impact
+  // (boxes and last_reviewed untouched); only the preview refresh runs.
+  if (drill.practice) {
+    refreshTrainSection();
+    return;
+  }
   const byBucket = {};
   drill.puzzles.forEach((p, i) => {
     const outcome = drill.results[i];

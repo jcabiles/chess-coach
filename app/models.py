@@ -875,6 +875,13 @@ class TrainerSessionResponse(BaseModel):
 
     buckets: list[TrainerBucketStatus] = Field(default_factory=list)
     puzzles: list[TrainerPuzzle] = Field(default_factory=list)
+    practice: bool = Field(
+        default=False,
+        description="True when nothing was due and this is a practice serve "
+        "(all live buckets; zero schedule impact — the client must not post "
+        "bucket-complete for a practice session). Authoritative: reflects "
+        "actual due-state at serve time, never a client guess.",
+    )
 
 
 class TrainerCheckRequest(BaseModel):

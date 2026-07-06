@@ -7,6 +7,7 @@ reject input before any engine call (bad FEN, illegal move) are tested directly.
 
 from __future__ import annotations
 
+from datetime import date as dt_date
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -817,6 +818,36 @@ class TestTrainerSessionStatsBucket:
         r2 = c.post("/api/trainer/session/start")
         assert [p["ply"] for p in r2.json()["puzzles"]] == [4, 5, 1]
         assert storage.get_trainer_boxes()[0]["cursor_key"] == f"{gid}:1:fork"
+
+    def test_session_start_due_serve_echoes_practice_false(self, trainer_client):
+        _seed_trainer_puzzle(START_FEN)
+        c = trainer_client({})
+        r = c.post("/api/trainer/session/start")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["practice"] is False
+        assert len(body["puzzles"]) == 1
+
+    def test_session_start_practice_fallback_when_nothing_due(self, trainer_client):
+        """The same bodyless POST falls back to a practice serve when nothing
+        is due; the authoritative practice echo flips and the Leitner schedule
+        (box, last_reviewed) is untouched by the serve."""
+        _seed_trainer_puzzle(START_FEN)
+        today = dt_date.today().isoformat()
+        storage.upsert_trainer_box("fork", box=5, last_reviewed=today)
+
+        c = trainer_client({})
+        r = c.post("/api/trainer/session/start")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["practice"] is True
+        assert [b["motif"] for b in body["buckets"]] == ["fork"]
+        assert len(body["puzzles"]) == 1
+
+        row = storage.get_trainer_boxes()[0]
+        assert row["box"] == 5                  # box untouched
+        assert row["last_reviewed"] == today    # stamp untouched
+        assert row["cursor_key"] is not None    # rotation DID advance
 
     def test_stats_smoke(self, trainer_client):
         gid = _seed_trainer_puzzle(START_FEN)

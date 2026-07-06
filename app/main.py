@@ -1017,8 +1017,16 @@ async def start_trainer_session():
     """Serve today's session and advance rotation cursors (no engine).
 
     MUTATING: called exactly once per Start click — every call burns rotation.
+    Nothing due → falls back to a practice serve over ALL live buckets; the
+    ``practice`` echo is authoritative (decided here at serve time, never by
+    the client) and tells the client to skip bucket-complete so the Leitner
+    schedule is untouched.
     """
-    return TrainerSessionResponse(**trainer.assemble_session())
+    data = trainer.assemble_session()
+    if data["puzzles"]:
+        return TrainerSessionResponse(**data)
+    data = trainer.assemble_session(practice=True)
+    return TrainerSessionResponse(**data, practice=True)
 
 
 @app.post("/api/trainer/check", response_model=TrainerCheckResponse)
