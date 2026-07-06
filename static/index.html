@@ -50,6 +50,7 @@
   <link rel="stylesheet" href="/static/movelist.css" />
   <link rel="stylesheet" href="/static/review.css" />
   <link rel="stylesheet" href="/static/insights.css" />
+  <link rel="stylesheet" href="/static/trainer.css" />
 
   <!-- Lucide icons via esm.sh — replaces HTML-entity glyphs on nav buttons -->
   <script type="module">
@@ -189,6 +190,22 @@
           <button id="rep-restart" title="Restart this line from the beginning"><i data-lucide="rotate-ccw"></i> Restart</button>
         </div>
       </div>
+
+      <!-- Blunder drill bar — shown only in blunder-practice mode (trainer.js) -->
+      <div id="trainer-bar" class="trainer-bar" hidden>
+        <div class="trainer-header">
+          <span id="trainer-title" class="trainer-title">Blunder Drill</span>
+          <button id="trainer-return">Return to my game</button>
+        </div>
+        <div id="trainer-move" class="trainer-move"></div>
+        <div id="trainer-note" class="trainer-note"></div>
+        <div id="trainer-feedback" class="trainer-feedback" hidden></div>
+        <div id="trainer-narration" class="trainer-narration" hidden></div>
+        <div class="trainer-controls">
+          <button id="trainer-reveal" title="Show the best move (counts as revealed)">Reveal move</button>
+          <button id="trainer-next" hidden>Next puzzle</button>
+        </div>
+      </div>
     </section>
 
     <aside class="panel">
@@ -301,6 +318,8 @@
 
       <!-- Review tab -->
       <div id="tab-review" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-review">
+        <!-- Train section — due buckets + Start (rendered by trainer.js) -->
+        <div id="trainer-section" class="trainer-section"></div>
         <!-- Profile dashboard -->
         <div id="review-profile" class="review-profile"></div>
         <!-- Game library + import — rendered by review.js -->
