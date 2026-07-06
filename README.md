@@ -14,6 +14,25 @@ move *before* each blunder.
 All open-source, free, and local-first. No accounts. Runtime API calls stay on
 your machine; the page may fetch pinned frontend assets from a CDN on first load.
 
+## Built AI-first
+
+Solo-built with an AI-native workflow (Claude Code + Codex) — and the process is
+checked in, not just claimed:
+
+- **Spec → contract map → adversarial review → tickets → verified code** — every
+  feature's full paper trail lives in [`docs/ai-dlc/`](docs/ai-dlc/): 12 specs, 9
+  hardened by a fresh-context "refuter" agent that attacks the spec before any
+  implementation.
+- **Versioned guardrails** — [`CLAUDE.md`](CLAUDE.md) encodes the constraints the
+  assistant must obey (engine-lock serialization, purity seams, commit policy);
+  [`.claude/settings.json`](.claude/settings.json) sandboxes it (denied secret
+  reads, no force-push, no direct pushes to `main`).
+- **AI-legible is testable** — pure logic modules (`analysis`, `motifs`, `pgn`,
+  `coaching`, `profile`) are engine-free, and the Stockfish wrapper sits behind a
+  fake-engine seam, so the full 500+-test suite runs with no engine binary.
+- **Deterministic at runtime** — the game-review coach is pure Stockfish +
+  python-chess with template narration: no LLM calls, no tokens, fully local.
+
 ![Stockfish Analysis Board — the analysis board after 5…Nxe4?, showing the eval
 jump to +3.53, a **Blunder** label, the retrospective best move (5…exd4) with a
 runner-up, Stockfish's best line, and the clickable move list](docs/screenshot.png)
@@ -178,39 +197,3 @@ docs/       design specs, build plans, and research notes per feature
 
 ## Frontend asset versions
 Pinned in `static/index.html`.
-
-## How this was built — AI-native workflow
-
-Built solo, AI-first (Claude Code + Codex), with the process itself checked in as
-a first-class artifact. Each feature runs the same pipeline, and the full paper
-trail lives in this repo:
-
-1. **Spec** — behavior, scope, and edge cases pinned down before any code
-   ([`docs/ai-dlc/specs/`](docs/ai-dlc/specs/), 12 features).
-2. **Contract map** — a read-only scout pass that documents the invisible
-   behavioral contracts (shared state, storage-key shapes, eval-sign conventions)
-   the change must not break ([`docs/ai-dlc/contracts/`](docs/ai-dlc/contracts/)).
-3. **Adversarial review** — a fresh-context "refuter" agent attacks the spec
-   before implementation; its blockers/majors are folded back in (8 of 12 specs
-   carry folded-in refuter findings — search `refuter` in any spec).
-4. **Ticket decomposition** — the spec is split into parallelizable tickets with
-   explicit file ownership and dependency ordering
-   ([`docs/ai-dlc/tickets/`](docs/ai-dlc/tickets/)).
-5. **Verified implementation** — nothing commits until tests pass and the diff
-   is reviewed; the commit policy is machine-readable in [`CLAUDE.md`](CLAUDE.md).
-
-Guardrails for the AI tooling are versioned too:
-
-- [`CLAUDE.md`](CLAUDE.md) — the project constraints the assistant must obey
-  (engine-lock serialization, purity seams, White-POV eval convention,
-  commit/verification policy).
-- [`.claude/settings.json`](.claude/settings.json) — sandboxed permissions:
-  denied secret reads, curated command allowlist, no force-push, no direct
-  pushes to `main`.
-
-Design choices that make the codebase AI-legible are the same ones that make it
-testable: pure logic modules (`analysis`, `motifs`, `pgn`, `coaching`, `profile`)
-are engine-free and unit-tested directly, the Stockfish wrapper is injected
-behind a fake-engine seam (the full suite runs with no engine binary), and the
-game-review coach is a **deterministic** Stockfish + python-chess pipeline —
-template narration, no LLM at runtime, no tokens, fully local.
