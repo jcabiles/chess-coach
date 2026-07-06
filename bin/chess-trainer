@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Global entry point for this project's dev server, exposed on PATH via
+# direnv's `PATH_add bin` in .envrc (see README: one-time `direnv allow`).
+# Thin delegate to scripts/serve.sh — a bare call defaults to "start";
+# any explicit subcommand (stop/restart/status) is forwarded as-is.
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+exec "$HERE/../scripts/serve.sh" "${1:-start}"
