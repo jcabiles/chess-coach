@@ -14,6 +14,10 @@
 //   'trap-practice' — interactive drill: the app auto-plays the victim's scripted
 //                     replies; the user must find each trapper move. Legal-but-wrong
 //                     moves snap back ("try again"); no quality label is ever shown.
+//   'blunder-practice' — spaced-repetition drill over your own recorded blunders
+//                     (trainer.js): board at the pre-blunder position, your move is
+//                     checked server-side (/api/trainer/check). Transient like the
+//                     other practice modes — never persisted.
 //
 // TODO(vendor): imported from a CDN (esm.sh resolves deps). To go offline,
 // vendor chessground + chessops into static/vendor/ and update these imports.
@@ -33,6 +37,7 @@ import { initInsights } from './insights.js';
 import { initSetup, enterSetupUI, EMPTY_PLACEMENT, INITIAL_PLACEMENT } from './setup.js';
 import { initRepertoire } from './repertoire.js';
 import { initTraps } from './traps.js';
+import { initTrainer } from './trainer.js';
 
 // EMPTY_PLACEMENT / INITIAL_PLACEMENT are imported from setup.js (their home
 // since the setup-editor extraction); persist() and init() still use them.
@@ -100,7 +105,7 @@ const _modeHandlers = Object.create(null); // { [mode]: { onMove?, exit? } }
 
 // Modes whose board moves MUST have a registered handler — falling through to
 // onUserMove would silently no-op (its early-returns), hiding a wiring bug.
-const PRACTICE_MODES = new Set(['trap-practice', 'rep-practice']);
+const PRACTICE_MODES = new Set(['trap-practice', 'rep-practice', 'blunder-practice']);
 
 function registerModeHandlers(mode, handlers) {
   _modeHandlers[mode] = handlers;
@@ -126,6 +131,7 @@ function persist() {
   if (state.mode === 'trap-watch') return;   // trap modes are transient — never persisted
   if (state.mode === 'trap-practice') return;// (both watch + practice)
   if (state.mode === 'rep-practice') return; // repertoire practice is transient too
+  if (state.mode === 'blunder-practice') return; // blunder drill is transient too
   if (state.mode === 'review') return;       // review replay is transient — same precedent
   try {
     let data;
@@ -913,6 +919,7 @@ function init() {
   initSetup(api);
   initRepertoire(api);
   initTraps(api);
+  initTrainer(api);
 
   // Play controls
   byId('undo').addEventListener('click', undo);

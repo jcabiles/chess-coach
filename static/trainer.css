@@ -1,0 +1,187 @@
+/* trainer.css — blunder trainer: Train section (Review tab) + drill bar.
+   Tokens-only: every color/space/radius comes from style.css custom
+   properties (both themes inherit automatically). */
+
+/* ============================================================
+   Train section (inside the Review tab panel)
+   ============================================================ */
+
+.trainer-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.trainer-section-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.trainer-section-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.trainer-start {
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  font-weight: 600;
+}
+
+.trainer-start:hover:not(:disabled) {
+  background: var(--accent-dim-hover);
+}
+
+.trainer-start:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  border-color: var(--border);
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+}
+
+.trainer-buckets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.trainer-bucket-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: var(--space-2);
+  align-items: baseline;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  font-size: 0.88rem;
+}
+
+.trainer-bucket-name { font-weight: 500; }
+
+.trainer-bucket-box,
+.trainer-bucket-pool {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.trainer-bucket-due {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.trainer-bucket-row.is-due .trainer-bucket-due {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.trainer-empty {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.6;
+  padding: var(--space-2);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+}
+
+/* ============================================================
+   Blunder drill bar (stays in board column — mirrors .rep-bar)
+   ============================================================ */
+
+.trainer-bar {
+  width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--surface-panel);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+
+.trainer-bar[hidden] { display: none; }
+
+.trainer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.trainer-title { font-weight: 600; }
+.trainer-move { font-size: 1rem; font-weight: 600; }
+
+.trainer-note {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-line;
+}
+
+.trainer-feedback {
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: var(--space-1) 0;
+}
+
+.trainer-feedback[hidden] { display: none; }
+.trainer-feedback.feedback-good { color: var(--q-best); }
+.trainer-feedback.feedback-bad  { color: var(--error); }
+
+/* Narrator foresight text (threat / hanging / plan / summary lines). */
+.trainer-narration {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.trainer-narration[hidden] { display: none; }
+
+.trainer-narration p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.trainer-controls { display: flex; gap: var(--space-1); flex-wrap: wrap; }
+
+/* ============================================================
+   Mode plumbing — mirrors the rep-practice rules in style.css
+   ============================================================ */
+
+/* Hide play-only controls while drilling (same set rep-mode hides). */
+body.trainer-mode #undo,
+body.trainer-mode #redo,
+body.trainer-mode #reset,
+body.trainer-mode #setup-toggle,
+body.trainer-mode .fen-row,
+body.trainer-mode #fen-error { display: none; }
+
+/* In blunder-practice the panel UI lives below the board: hide the right
+   panel and collapse to a single board column (same rule the other
+   non-play modes get in style.css). */
+body[data-mode="blunder-practice"] main {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body[data-mode="blunder-practice"] .panel {
+  display: none;
+}
+
+/* Mobile tier — match style.css's ≤560px rules for the other mode bars. */
+@media (max-width: 560px) {
+  .trainer-bar { width: auto; }
+  .trainer-header { flex-wrap: wrap; }
+}
