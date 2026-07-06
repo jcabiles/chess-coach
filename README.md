@@ -7,9 +7,11 @@ colors** freely, jump to any position by FEN, and get **live Stockfish feedback*
 (eval, best move + line, move-quality label) after every move.
 
 It has grown into a small **training suite**: an **opening trainer**, an
-**opening-traps trainer**, a **repertoire trainer**, and a **game-review coach**
+**opening-traps trainer**, a **repertoire trainer**, a **game-review coach**
 that imports your past games and flags your recurring mistakes — with a warning a
-move *before* each blunder.
+move *before* each blunder — an **insights dashboard** that turns those reviews
+into cross-game analytics, and a **blunder trainer** that re-serves your own
+mistakes as spaced-repetition puzzles.
 
 All open-source, free, and local-first. No accounts. Runtime API calls stay on
 your machine; the page may fetch pinned frontend assets from a CDN on first load.
@@ -20,7 +22,7 @@ Solo-built with an AI-native workflow (Claude Code + Codex) — and the process 
 checked in, not just claimed:
 
 - **Spec → contract map → adversarial review → tickets → verified code** — every
-  feature's full paper trail lives in [`docs/ai-dlc/`](docs/ai-dlc/): 12 specs, 9
+  feature's full paper trail lives in [`docs/ai-dlc/`](docs/ai-dlc/): 14 specs, 11
   hardened by a fresh-context "refuter" agent that attacks the spec before any
   implementation.
 - **Versioned guardrails** — [`CLAUDE.md`](CLAUDE.md) encodes the constraints the
@@ -30,7 +32,7 @@ checked in, not just claimed:
 - **AI-legible is testable** — pure logic modules (e.g. `analysis`, `motifs`,
   `pgn`) plus engine-free read-models (`profile`, `insights`) never touch
   Stockfish, and the engine wrapper sits behind a fake-engine seam, so the full
-  500+-test suite runs with no engine binary. Module map and invariants:
+  600+-test suite runs with no engine binary. Module map and invariants:
   [`ARCHITECTURE.md`](ARCHITECTURE.md).
 - **Deterministic at runtime** — the game-review coach is pure Stockfish +
   python-chess with template narration: no LLM calls, no tokens, fully local.
@@ -177,6 +179,16 @@ The opening trainer uses the bundled lichess-org/chess-openings TSVs under
   sides** (you and your opponent) in the review bar — Chess.com-style, derived from
   the per-move evals already computed (no extra engine work). The rating is a rough
   single-game estimate, not an official number.
+- **Insights:** a read-only analytics tab over your reviewed games — opening
+  performance vs your repertoire, mistake patterns by motif/phase (with
+  foreseeable-blunder and time-trouble cards), and endgame conversion — each card
+  deep-linking into the exact game and move it came from.
+- **Blunder Trainer:** the **Train** section in the Review tab re-serves your own
+  recorded mistakes as puzzles. Scheduling is Leitner spaced repetition over
+  **motif buckets** (fork, pin, back rank…), rotating through *different* positions
+  each review so you learn the pattern, not the board. Your answer is checked live
+  by Stockfish (close-enough alternatives count); a miss gets one retry, then the
+  answer plus the same threat-narration the review coach uses.
 
 ## Develop / test
 ```sh
@@ -187,10 +199,13 @@ pytest tests/test_analysis.py   # pure logic only
 
 ## Project layout
 ```
-app/        FastAPI app + single-engine wrapper; pure logic (analysis, motifs);
-            SQLite storage, PGN import, the game-review pipeline, coaching/profile,
-            and per-trainer logic (openings, traps, book, repertoire)
-static/     frontend — one SPA with tab panels; chessground/chessops from pinned CDNs
+app/        FastAPI app + single-engine wrapper; pure logic (analysis, motifs,
+            trainer); SQLite storage, PGN import, the game-review pipeline,
+            coaching/profile/insights read-models, and per-trainer logic
+            (openings, traps, book, repertoire, blunder trainer)
+static/     frontend — one SPA, a small hub (app.js) plus per-feature modules
+            (setup, traps, repertoire, review, insights, trainer…) wired through
+            an injected api; chessground/chessops from pinned CDNs
 data/       bundled opening TSVs + traps/book/repertoire JSON; your saved games
             (data/games.db, data/games/) are gitignored
 tests/      unit + API tests; the whole suite runs with no Stockfish binary present
