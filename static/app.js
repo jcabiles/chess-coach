@@ -109,6 +109,23 @@ function emit(evt, ...args) {
   if (fns) fns.forEach((fn) => { try { fn(...args); } catch (_) {} });
 }
 
+// ---------------------------------------------------------------------------
+// Mode handler registry. Feature modules (setup/traps/repertoire) register the
+// board-move handler and teardown for the modes they own; the ground
+// events.after dispatcher and ensurePlay() look handlers up here instead of
+// hard-referencing module functions. The bus can't carry these flows — they
+// need ordered, awaitable control, and emit() swallows handler errors.
+// ---------------------------------------------------------------------------
+const _modeHandlers = Object.create(null); // { [mode]: { onMove?, exit? } }
+
+// Modes whose board moves MUST have a registered handler — falling through to
+// onUserMove would silently no-op (its early-returns), hiding a wiring bug.
+const PRACTICE_MODES = new Set(['trap-practice', 'rep-practice']);
+
+function registerModeHandlers(mode, handlers) {
+  _modeHandlers[mode] = handlers;
+}
+
 // Set state.mode, reflect it on the body attribute, and emit the mode:change event.
 // All mode transitions should go through this helper so listeners (tab-switch,
 // body class watchers, etc.) are always notified.
@@ -198,6 +215,35 @@ function restore() {
     return null; // unparseable FEN / illegal move → fall back to defaults
   }
 }
+
+// --- play-state snapshots ---------------------------------------------------
+// Canonical 5-field snapshot used by every mode transition (setup/trap/rep/
+// review). Trainers keep their own copies; setup's Cancel target lives in the
+// hub-owned `playSnapshot` because persist()/restore() serialize it.
+
+function snapshotPlay() {
+  return {
+    baseFen: state.baseFen,
+    moves: state.moves.slice(),
+    moveQuality: state.moveQuality.slice(),
+    moveRetro: state.moveRetro.slice(),
+    cursor: state.cursor,
+  };
+}
+
+// Tolerates the legacy 3-field shape restore() rebuilds from localStorage —
+// moveQuality/moveRetro are transient and never persisted, so a snapshot that
+// crossed a page reload arrives without them.
+function restorePlay(snap) {
+  state.baseFen = snap.baseFen;
+  state.moves = (snap.moves || []).slice();
+  state.moveQuality = (snap.moveQuality || []).slice();
+  state.moveRetro = (snap.moveRetro || []).slice();
+  state.cursor = snap.cursor | 0;
+}
+
+function getPlaySnapshot() { return playSnapshot; }
+function setPlaySnapshot(snap) { playSnapshot = snap; }
 
 // --- position helpers ------------------------------------------------------
 
@@ -1567,10 +1613,11 @@ function renderRepertoireTree() {
 }
 
 // Ensure we are back in clean play mode before a jump/practice entry.
+// Dispatches to the exit handler registered for the current mode; modes with
+// no registration (play, review) are a no-op — same as the old if/else chain.
 function ensurePlay() {
-  if (state.mode === 'trap-watch' || state.mode === 'trap-practice') exitTrap();
-  else if (state.mode === 'rep-practice') exitRepPractice();
-  else if (state.mode === 'setup') cancelSetup();
+  const h = _modeHandlers[state.mode];
+  if (h && h.exit) h.exit();
 }
 
 // Jump: fast-forward to a line's end WITH full history (Undo steps back through it;
@@ -1970,11 +2017,18 @@ function init() {
       events: {
         after: (orig, dest) => {
           // trap-practice and rep-practice each have their own validated move
-          // path; everything else (play/setup) goes through onUserMove (study/
-          // trap-watch early-return).
-          if (state.mode === 'trap-practice') onTrapMove(orig, dest);
-          else if (state.mode === 'rep-practice') onRepMove(orig, dest);
-          else onUserMove(orig, dest);
+          // path (registered in the mode-handler registry); everything else
+          // (play/setup) goes through onUserMove (study/trap-watch early-return).
+          const h = _modeHandlers[state.mode];
+          if (h && h.onMove) { h.onMove(orig, dest); return; }
+          if (PRACTICE_MODES.has(state.mode)) {
+            // A practice mode with no registered handler is a wiring bug —
+            // fail loudly; falling through to onUserMove would silently no-op.
+            console.error(`No move handler registered for mode "${state.mode}"`);
+            setStatus('Internal error: move handler missing — reload the page.', true);
+            return;
+          }
+          onUserMove(orig, dest);
         },
       },
     },
@@ -2007,6 +2061,30 @@ function init() {
       exitReview,            // called by review.js "Return to my game"
       openGameAtPly,         // deep-link seam: insights.js → game+ply in review mode
     },
+    // Shared hub services for extracted feature modules (setup/traps/
+    // repertoire). One-directional contract: modules receive this api and
+    // never import app.js. Position/promotion helpers live here so modules
+    // never duplicate them (a promotion-dialog fix must land exactly once).
+    hub: {
+      syncBoard,
+      postJSON,
+      refreshAnalysis,
+      persist,
+      setMode,
+      setStatus,
+      snapshotPlay,
+      restorePlay,
+      getPlaySnapshot,
+      setPlaySnapshot,
+      ensurePlay,
+      registerModeHandlers,
+      isPromotion,
+      askPromotion,
+      positionFromFen,
+      positionAt,
+      fenOf,
+      lastMoveSquares,
+    },
     on,
     emit,
     mounts: {
@@ -2016,6 +2094,14 @@ function init() {
       tabs: byId('panel-tabs'),
     },
   };
+
+  // Mode registrations — the hub owns all four until their modules are
+  // extracted (setup → PR-A, repertoire → PR-B, traps → PR-C move these
+  // calls into their own initX(api)).
+  registerModeHandlers('setup', { exit: cancelSetup });
+  registerModeHandlers('trap-watch', { exit: exitTrap });
+  registerModeHandlers('trap-practice', { onMove: onTrapMove, exit: exitTrap });
+  registerModeHandlers('rep-practice', { onMove: onRepMove, exit: exitRepPractice });
 
   // Tab-switch wiring: clicking a [data-tab] button activates the matching panel.
   // No-op outside 'play' mode; null-guarded if #panel-tabs is absent.
