@@ -61,16 +61,32 @@ per-move coaching notes.
    pip install -r requirements.txt
    ```
 
-3. **Run:**
+3. **(Optional, recommended) [direnv](https://direnv.net/)** — auto-activates
+   the venv and exposes the `chess-trainer` command whenever you `cd` into
+   this repo:
    ```sh
+   brew install direnv                            # macOS; see direnv.net for other OSes
+   echo 'eval "$(direnv hook zsh)"' >> ~/.zshrc    # or ~/.bashrc for bash
+   direnv allow .                                  # one-time per clone: trusts this repo's .envrc
+   ```
+
+4. **Run:**
+   ```sh
+   chess-trainer            # with direnv: start the server in the background
+   chess-trainer stop       #   stop / restart / status also work
+   ```
+   or, without direnv:
+   ```sh
+   scripts/serve.sh start   # same background start/stop/restart/status
+   # — or, for active development with auto-reload on file changes —
    uvicorn app.main:app --reload --port 8001
    ```
    Open <http://localhost:8001>.
 
    > Port **8001** is the default here because **8000** (uvicorn's own default)
-   > is commonly taken by other local apps. Use any free port — e.g.
-   > `--port 8123`. Run two apps at once by giving each its own port; no need
-   > to stop the other.
+   > is commonly taken by other local apps. Override with `PORT=8123
+   > chess-trainer` (or `--port 8123` for the raw `uvicorn` command). Run two
+   > apps at once by giving each its own port; no need to stop the other.
 
 ## Configuration (optional)
 
