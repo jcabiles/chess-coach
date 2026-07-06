@@ -11,7 +11,7 @@ parallel pair — everything else strictly sequential.
 
 ## PR-0 — cache header (parallel worker)
 
-- [ ] **T1 — no-store on /static.** Add `@app.middleware("http")` in
+- [x] **T1 — no-store on /static.** Add `@app.middleware("http")` in
   `app/main.py` setting `Cache-Control: no-store` on responses for paths
   starting `/static` (StaticFiles has no headers kwarg; middleware also covers
   304s). Write new API test asserting the header on `/static/app.js`.
@@ -28,7 +28,7 @@ parallel pair — everything else strictly sequential.
   (Cmd+Shift+R) needed after PR-A merges; don't mistake it for a regression
   during Phase-1 verification.
 
-- [ ] **T2 — widen injected api (expose-only).** Extend the `api` object in
+- [x] **T2 — widen injected api (expose-only).** Extend the `api` object in
   app.js: `syncBoard`, `postJSON`, `refreshAnalysis`, `persist`, `setMode`,
   `setStatus`, `snapshotPlay`, `restorePlay` (MUST default missing
   `moveQuality`/`moveRetro` → `[]`, `cursor` → 0), `ensurePlay`,
@@ -46,7 +46,7 @@ parallel pair — everything else strictly sequential.
   still validates/snap-backs** (proves all four registrations); no console
   errors.
 
-- [ ] **T3 — extract setup.js.** Move setup functions per contracts
+- [x] **T3 — extract setup.js.** Move setup functions per contracts
   "Extraction inventory" (function names, NOT line ranges — hub play controls
   are interleaved in that span and stay). Move init()'s setup DOM wiring
   (:2100-2109) **plus the board-level brush listeners at :2053-2054**
@@ -60,14 +60,14 @@ parallel pair — everything else strictly sequential.
   crash); cross-cutting guards (movelist tints + retro panel after return;
   play move analyzes).
 
-- [ ] **T4 — PR-A docs + ship.** ARCHITECTURE.md codemap row for `setup.js`;
+- [x] **T4 — PR-A docs + ship.** ARCHITECTURE.md codemap row for `setup.js`;
   branch per commit policy (fetch/status first); PR.
   **Done when:** PR open, full pytest green, diff reviewed, no debug
   artifacts.
 
 ## PR-B (Phase 2) — repertoire.js
 
-- [ ] **T5 — extract repertoire.js.** Move rep functions per inventory
+- [x] **T5 — extract repertoire.js.** Move rep functions per inventory
   (**excluding `ensurePlay`** — stays hub); move rep DOM wiring
   (:2143-2147) into `initRepertoire(api)`; owns `rep`, `repTree`,
   `repSnapshot`, `repEngineToken`; registers `rep-practice` handlers.
@@ -77,12 +77,12 @@ parallel pair — everything else strictly sequential.
   restart, engine handoff after prep, **promotion during practice if line
   allows** → Return restores snapshot; cross-cutting guards pass.
 
-- [ ] **T6 — PR-B docs + ship.** ARCHITECTURE.md row; PR.
+- [x] **T6 — PR-B docs + ship.** ARCHITECTURE.md row; PR.
   **Done when:** same bar as T4.
 
 ## PR-C (Phase 3) — traps.js (riskiest, last)
 
-- [ ] **T7 — extract traps.js.** Move trap functions per inventory; move
+- [x] **T7 — extract traps.js.** Move trap functions per inventory; move
   traps DOM wiring (:2111-2138) into `initTraps(api)`; owns `trap`,
   `trapsData`, `studyEvalToken` (whole — never split watch/practice),
   `trapsCheckToken`, `trapChipDismissedFen`, `studySnapshot`; registers
@@ -96,7 +96,7 @@ parallel pair — everything else strictly sequential.
   cross-cutting guards pass; no stale-eval flicker stepping fast
   (token guard intact).
 
-- [ ] **T8 — PR-C docs + ship + closeout.** ARCHITECTURE.md row; confirm hub
+- [x] **T8 — PR-C docs + ship + closeout.** ARCHITECTURE.md row; confirm hub
   ≈900-1,000 lines; **refresh `docs/ai-dlc/profile.md` hotspots** (its
   app.js/review.js line refs — e.g. "tab array ~:1999" — are stale after the
   split); PR; mark audit Item 1 done.
