@@ -289,6 +289,67 @@ class TestAssembleSession:
 
 
 # ---------------------------------------------------------------------------
+# preview_due_buckets — idempotent peek (no serving, no cursor movement)
+# ---------------------------------------------------------------------------
+
+class TestPreviewDueBuckets:
+    def test_reports_status_without_creating_rows(self, tmp_path):
+        _init(tmp_path)
+        gid = _qualified_game()
+        _seed_puzzles(gid, [{"ply": p, "motif": "fork"} for p in (1, 2)])
+        preview = trainer.preview_due_buckets(TODAY)
+        assert preview == [{
+            "motif": "fork", "box": 1, "last_reviewed": None,
+            "pool_size": 2, "due": True,
+        }]
+        assert storage.get_trainer_boxes() == []  # nothing persisted
+
+    def test_flags_not_due_bucket(self, tmp_path):
+        _init(tmp_path)
+        gid = _qualified_game()
+        _seed_puzzles(gid, [{"ply": 1, "motif": "fork"}])
+        storage.upsert_trainer_box("fork", box=5, last_reviewed=TODAY.isoformat())
+        preview = trainer.preview_due_buckets(TODAY)
+        assert preview == [{
+            "motif": "fork", "box": 5, "last_reviewed": TODAY.isoformat(),
+            "pool_size": 1, "due": False,
+        }]
+
+    def test_consecutive_previews_leave_boxes_identical(self, tmp_path):
+        """Preview never burns rotation: rows are byte-identical across calls
+        (a stale empty-pool row is hygiene-reset once, then stable)."""
+        _init(tmp_path)
+        gid = _qualified_game()
+        _seed_puzzles(gid, [{"ply": 1, "motif": "fork"}])
+        storage.upsert_trainer_box(
+            "fork", box=3, last_reviewed="2026-07-01", cursor_key=f"{gid}:1:fork"
+        )
+        storage.upsert_trainer_box(
+            "pin", box=5, last_reviewed="2026-01-01", cursor_key="9:9:pin"
+        )  # empty pool → hygiene target
+        trainer.preview_due_buckets(TODAY)
+        rows_after_first = storage.get_trainer_boxes()
+        trainer.preview_due_buckets(TODAY)
+        assert storage.get_trainer_boxes() == rows_after_first
+        # fork untouched (cursor intact); pin hygiene-reset.
+        assert rows_after_first == [
+            {"motif": "fork", "box": 3, "last_reviewed": "2026-07-01",
+             "cursor_key": f"{gid}:1:fork"},
+            {"motif": "pin", "box": 1, "last_reviewed": None, "cursor_key": None},
+        ]
+
+    def test_preview_does_not_burn_rotation(self, tmp_path):
+        """assemble_session serves from the first item even after previews."""
+        _init(tmp_path)
+        gid = _qualified_game()
+        _seed_puzzles(gid, [{"ply": p, "motif": "fork"} for p in (1, 2, 3, 4, 5)])
+        trainer.preview_due_buckets(TODAY)
+        trainer.preview_due_buckets(TODAY)
+        session = trainer.assemble_session(TODAY)
+        assert [p["ply"] for p in session["puzzles"]] == [1, 2, 3]
+
+
+# ---------------------------------------------------------------------------
 # complete_bucket_review — persistence seam
 # ---------------------------------------------------------------------------
 

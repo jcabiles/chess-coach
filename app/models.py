@@ -854,8 +854,24 @@ class TrainerBucketStatus(BaseModel):
     served: int = Field(description="Puzzles from this bucket in this session.")
 
 
+class TrainerPreviewBucket(BaseModel):
+    """One live-pool bucket's status in the idempotent session preview."""
+
+    motif: str
+    box: int = Field(description="Leitner box 1..5.")
+    last_reviewed: str | None = None
+    pool_size: int = Field(description="Live qualifying puzzles in this bucket.")
+    due: bool = Field(description="Whether the bucket is due for review today.")
+
+
+class TrainerPreviewResponse(BaseModel):
+    """Response for ``GET /api/trainer/session`` (read-only peek, no serving)."""
+
+    buckets: list[TrainerPreviewBucket] = Field(default_factory=list)
+
+
 class TrainerSessionResponse(BaseModel):
-    """Response for ``GET /api/trainer/session``."""
+    """Response for ``POST /api/trainer/session/start`` (the mutating serve)."""
 
     buckets: list[TrainerBucketStatus] = Field(default_factory=list)
     puzzles: list[TrainerPuzzle] = Field(default_factory=list)
@@ -866,8 +882,9 @@ class TrainerCheckRequest(BaseModel):
 
     game_id: int
     ply: int
-    threat_motif: str = Field(
-        description="The bucket the puzzle was served under (part of the natural key)."
+    bucket: str = Field(
+        description="The bucket the puzzle was served under — threat_motif falling "
+        "back to category, i.e. TrainerPuzzle.bucket (part of the natural key)."
     )
     attempted_uci: str
     offline: bool = Field(

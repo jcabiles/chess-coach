@@ -627,7 +627,7 @@ class TestTrainerCheck:
         gid = _seed_trainer_puzzle(START_FEN)
         c = trainer_client({START_FEN: _trainer_result(START_FEN, 30, "e2e4")})
         r = c.post("/api/trainer/check", json={
-            "game_id": gid, "ply": 5, "threat_motif": "fork",
+            "game_id": gid, "ply": 5, "bucket": "fork",
             "attempted_uci": "e2e4",
         })
         assert r.status_code == 200, r.text
@@ -652,7 +652,7 @@ class TestTrainerCheck:
             after: _trainer_result(after, 10),
         })
         r = c.post("/api/trainer/check", json={
-            "game_id": gid, "ply": 5, "threat_motif": "fork",
+            "game_id": gid, "ply": 5, "bucket": "fork",
             "attempted_uci": "d2d4",
         })
         body = r.json()
@@ -672,7 +672,7 @@ class TestTrainerCheck:
             after: _trainer_result(after, -100),
         })
         r = c.post("/api/trainer/check", json={
-            "game_id": gid, "ply": 5, "threat_motif": "pin",
+            "game_id": gid, "ply": 5, "bucket": "pin",
             "attempted_uci": "c7c5",
         })
         body = r.json()
@@ -694,7 +694,7 @@ class TestTrainerCheck:
             after: _trainer_result(after, -300),
         })
         r = c.post("/api/trainer/check", json={
-            "game_id": gid, "ply": 5, "threat_motif": "pin",
+            "game_id": gid, "ply": 5, "bucket": "pin",
             "attempted_uci": "c7c5",
         })
         body = r.json()
@@ -710,7 +710,7 @@ class TestTrainerCheck:
             after: _trainer_result(after, 320),
         })
         r = c.post("/api/trainer/check", json={
-            "game_id": gid, "ply": 5, "threat_motif": "fork",
+            "game_id": gid, "ply": 5, "bucket": "fork",
             "attempted_uci": "d2d4",
         })
         body = r.json()
@@ -721,7 +721,7 @@ class TestTrainerCheck:
         gid = _seed_trainer_puzzle(START_FEN)
         c = trainer_client({})
         r = c.post("/api/trainer/check", json={
-            "game_id": gid, "ply": 5, "threat_motif": "fork",
+            "game_id": gid, "ply": 5, "bucket": "fork",
             "attempted_uci": "e2e5",
         })
         assert r.status_code == 200
@@ -734,7 +734,7 @@ class TestTrainerCheck:
         gid = _seed_trainer_puzzle(START_FEN, motif="fork")
         c = trainer_client({})
         r = c.post("/api/trainer/check", json={
-            "game_id": gid, "ply": 5, "threat_motif": "pin",  # wrong bucket
+            "game_id": gid, "ply": 5, "bucket": "pin",  # wrong bucket
             "attempted_uci": "e2e4",
         })
         assert r.status_code == 404
@@ -743,7 +743,7 @@ class TestTrainerCheck:
         gid = _seed_trainer_puzzle(START_FEN, best_uci="e2e4", best_san="e4")
         c = trainer_client({})
         r = c.post("/api/trainer/check", json={
-            "game_id": gid, "ply": 5, "threat_motif": "fork",
+            "game_id": gid, "ply": 5, "bucket": "fork",
             "attempted_uci": "e2e4", "offline": True,
         })
         body = r.json()
@@ -761,7 +761,7 @@ class TestTrainerCheck:
         gid = _seed_trainer_puzzle(START_FEN)
         c = trainer_client(engine=UnavailableEngine())
         r = c.post("/api/trainer/check", json={
-            "game_id": gid, "ply": 5, "threat_motif": "fork",
+            "game_id": gid, "ply": 5, "bucket": "fork",
             "attempted_uci": "e2e4",
         })
         assert r.status_code == 503
@@ -769,25 +769,60 @@ class TestTrainerCheck:
 
 
 class TestTrainerSessionStatsBucket:
-    def test_session_serves_seeded_puzzle(self, trainer_client):
+    def test_session_preview_is_idempotent_read(self, trainer_client):
+        """GET /api/trainer/session peeks only: no puzzles, no cursor burn."""
         gid = _seed_trainer_puzzle(START_FEN)
+        assert gid > 0
         c = trainer_client({})
-        r = c.get("/api/trainer/session")
-        assert r.status_code == 200, r.text
-        body = r.json()
-        assert len(body["puzzles"]) == 1
-        assert body["puzzles"][0]["key"] == f"{gid}:5:fork"
-        assert body["puzzles"][0]["fen_before"] == START_FEN
-        assert body["buckets"] == [{
+        r1 = c.get("/api/trainer/session")
+        assert r1.status_code == 200, r1.text
+        assert r1.json() == {"buckets": [{
             "motif": "fork", "box": 1, "last_reviewed": None,
-            "pool_size": 1, "served": 1,
+            "pool_size": 1, "due": True,
+        }]}
+        rows_after_first = storage.get_trainer_boxes()
+        r2 = c.get("/api/trainer/session")
+        assert r2.json() == r1.json()
+        assert storage.get_trainer_boxes() == rows_after_first  # cursors untouched
+
+    def test_session_start_serves_and_advances_rotation(self, trainer_client):
+        """POST /api/trainer/session/start is the mutating serve: consecutive
+        starts walk the bucket's rotation (existing cursor semantics)."""
+        gid = _seed_trainer_puzzle(START_FEN, ply=1)
+        # Grow the same game/bucket to 5 puzzles (write_* replace per game).
+        storage.write_plies(gid, [
+            {"ply": p, "fen_before": START_FEN} for p in (1, 2, 3, 4, 5)
+        ])
+        storage.write_leaks(gid, [storage.LeakRecord(
+            game_id=gid, ply=p, color="white", severity="blunder",
+            category="hanging", phase="middlegame",
+            win_prob_before=0.7, win_prob_after=0.3, win_prob_drop=0.4,
+            threat_motif="fork", best_uci="e2e4", best_san="e4",
+        ) for p in (1, 2, 3, 4, 5)])
+
+        c = trainer_client({})
+        # A prior preview must not affect what start serves.
+        c.get("/api/trainer/session")
+
+        r1 = c.post("/api/trainer/session/start")
+        assert r1.status_code == 200, r1.text
+        body1 = r1.json()
+        assert [p["ply"] for p in body1["puzzles"]] == [1, 2, 3]
+        assert body1["buckets"] == [{
+            "motif": "fork", "box": 1, "last_reviewed": None,
+            "pool_size": 5, "served": 3,
         }]
+        assert storage.get_trainer_boxes()[0]["cursor_key"] == f"{gid}:3:fork"
+
+        r2 = c.post("/api/trainer/session/start")
+        assert [p["ply"] for p in r2.json()["puzzles"]] == [4, 5, 1]
+        assert storage.get_trainer_boxes()[0]["cursor_key"] == f"{gid}:1:fork"
 
     def test_stats_smoke(self, trainer_client):
         gid = _seed_trainer_puzzle(START_FEN)
         c = trainer_client({START_FEN: _trainer_result(START_FEN, 30, "e2e4")})
         c.post("/api/trainer/check", json={
-            "game_id": gid, "ply": 5, "threat_motif": "fork",
+            "game_id": gid, "ply": 5, "bucket": "fork",
             "attempted_uci": "e2e4",
         })
         r = c.get("/api/trainer/stats")

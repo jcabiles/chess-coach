@@ -649,6 +649,8 @@ def record_trainer_attempt(
 
     The puzzle's durable identity is the natural key (game_id, ply,
     threat_motif) — never leaks.id, which is reissued on every re-analysis.
+    The threat_motif column stores the BUCKET the puzzle was served under
+    (COALESCE(threat_motif, category)) — the column name predates the rename.
     check_depth is the engine depth the verdict was computed at; the sentinel
     0 means an offline exact-match check (engine unavailable).
 

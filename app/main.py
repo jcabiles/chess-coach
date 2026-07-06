@@ -77,6 +77,7 @@ from app.models import (
     TrainerBucketCompleteResponse,
     TrainerCheckRequest,
     TrainerCheckResponse,
+    TrainerPreviewResponse,
     TrainerSessionResponse,
     TrainerStatsResponse,
     TrapsCheckRequest,
@@ -1002,9 +1003,21 @@ SOLVED_ALT_MAX_CP_LOSS = 50  # attempted move within 50cp of best → solved_alt
 WINNING_MOVER_CP = 300       # both evals >= +300 mover-POV (still winning) → solved_alt
 
 
-@app.get("/api/trainer/session", response_model=TrainerSessionResponse)
+@app.get("/api/trainer/session", response_model=TrainerPreviewResponse)
 async def get_trainer_session():
-    """Assemble today's due-bucket training session (no engine involved)."""
+    """Idempotent peek at bucket/due status (no engine, no cursor movement).
+
+    Safe to call on every Train-section render — serving is a separate POST.
+    """
+    return TrainerPreviewResponse(buckets=trainer.preview_due_buckets())
+
+
+@app.post("/api/trainer/session/start", response_model=TrainerSessionResponse)
+async def start_trainer_session():
+    """Serve today's session and advance rotation cursors (no engine).
+
+    MUTATING: called exactly once per Start click — every call burns rotation.
+    """
     return TrainerSessionResponse(**trainer.assemble_session())
 
 
@@ -1022,9 +1035,9 @@ async def check_trainer_move(
     """
     # Resolve the natural key against the LIVE pool — the qualification gate,
     # bucket fallback, and server-side fen_before all come from trainer sourcing.
-    key = trainer.natural_key(req.game_id, req.ply, req.threat_motif)
+    key = trainer.natural_key(req.game_id, req.ply, req.bucket)
     pool = trainer.get_live_pool()
-    puzzle = next((p for p in pool.get(req.threat_motif, []) if p["key"] == key), None)
+    puzzle = next((p for p in pool.get(req.bucket, []) if p["key"] == key), None)
     if puzzle is None:
         return JSONResponse(
             status_code=404, content={"detail": f"No live puzzle for key '{key}'."}
@@ -1059,7 +1072,7 @@ async def check_trainer_move(
         if verdict == "failed" and leak_row is not None:
             narration = coaching.get_narrator().narrate_leak(leak_row)
         storage.record_trainer_attempt(
-            req.game_id, req.ply, req.threat_motif, req.attempted_uci,
+            req.game_id, req.ply, req.bucket, req.attempted_uci,
             verdict, None, 0,
         )
         return TrainerCheckResponse(
@@ -1114,7 +1127,7 @@ async def check_trainer_move(
         narration = coaching.get_narrator().narrate_leak(leak_row)
 
     storage.record_trainer_attempt(
-        req.game_id, req.ply, req.threat_motif, req.attempted_uci,
+        req.game_id, req.ply, req.bucket, req.attempted_uci,
         verdict, loss, DEFAULT_DEPTH,
     )
     return TrainerCheckResponse(
@@ -1144,6 +1157,8 @@ async def get_trainer_stats():
 @app.post("/api/trainer/bucket-complete", response_model=TrainerBucketCompleteResponse)
 async def complete_trainer_bucket(req: TrainerBucketCompleteRequest):
     """Close out a finished bucket review: apply the Leitner box transition."""
+    # motif is deliberately unvalidated (single-user trust model): an unknown
+    # motif just creates a box row that box hygiene resets on next assembly.
     new_box = trainer.complete_bucket_review(req.motif, list(req.outcomes))
     return TrainerBucketCompleteResponse(motif=req.motif, box=new_box)
 

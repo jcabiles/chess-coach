@@ -181,8 +181,69 @@ def _rotate(puzzles: list[dict], cursor_key: Optional[str], count: int) -> list[
 # Session assembly
 # ---------------------------------------------------------------------------
 
+def _reset_empty_boxes(pool: dict[str, list[dict]], boxes: dict[str, dict]) -> None:
+    """Box hygiene: reset rows whose motif has zero live qualifying leaks.
+
+    Idempotent — a stale box-5 schedule must not apply to a future,
+    effectively-new weakness pool.
+    """
+    for motif in boxes:
+        if motif not in pool:
+            storage.upsert_trainer_box(motif, box=1, last_reviewed=None, cursor_key=None)
+
+
+def _bucket_states(
+    pool: dict[str, list[dict]], boxes: dict[str, dict], today: date | str
+) -> list[dict]:
+    """Per-pool-bucket state + due flag, in deterministic (motif) order.
+
+    A bucket with no trainer_boxes row is box 1, never reviewed — due.
+    """
+    states: list[dict] = []
+    for motif in sorted(pool):
+        row = boxes.get(motif)
+        box = row["box"] if row else 1
+        last_reviewed = row["last_reviewed"] if row else None
+        states.append({
+            "motif": motif,
+            "box": box,
+            "last_reviewed": last_reviewed,
+            "cursor_key": row["cursor_key"] if row else None,
+            "pool_size": len(pool[motif]),
+            "due": is_due(box, last_reviewed, today),
+        })
+    return states
+
+
+def preview_due_buckets(today: Optional[date | str] = None) -> list[dict]:
+    """Peek at bucket/due status WITHOUT serving puzzles or moving cursors.
+
+    Idempotent read seam for the Train section (safe to call on every
+    render): never touches cursor_key, never serves a puzzle.  Box hygiene
+    DOES run here — resetting a stale row for an emptied pool is idempotent
+    and keeps the displayed box levels honest — and hygiene only ever touches
+    rows whose motif has zero live leaks, which are precisely the rows this
+    preview does not report.
+
+    Returns one dict per live-pool bucket:
+    ``{motif, box, last_reviewed, pool_size, due}``.
+    """
+    if today is None:
+        today = date.today()
+    pool = get_live_pool()
+    boxes = {r["motif"]: r for r in storage.get_trainer_boxes()}
+    _reset_empty_boxes(pool, boxes)
+    return [
+        {k: s[k] for k in ("motif", "box", "last_reviewed", "pool_size", "due")}
+        for s in _bucket_states(pool, boxes, today)
+    ]
+
+
 def assemble_session(today: Optional[date | str] = None) -> dict:
     """Assemble today's training session and advance rotation cursors.
+
+    MUTATING serve — every call advances each served bucket's cursor_key.
+    Use :func:`preview_due_buckets` for read-only status display.
 
     Steps:
       1. Box hygiene: any trainer_boxes row whose motif has zero live
@@ -210,24 +271,10 @@ def assemble_session(today: Optional[date | str] = None) -> dict:
     boxes = {r["motif"]: r for r in storage.get_trainer_boxes()}
 
     # 1. Box hygiene — reset rows whose motif pool is empty.
-    for motif in boxes:
-        if motif not in pool:
-            storage.upsert_trainer_box(motif, box=1, last_reviewed=None, cursor_key=None)
+    _reset_empty_boxes(pool, boxes)
 
     # 2. Due buckets, in deterministic (motif) order.
-    due: list[dict] = []
-    for motif in sorted(pool):
-        row = boxes.get(motif)
-        box = row["box"] if row else 1
-        last_reviewed = row["last_reviewed"] if row else None
-        if is_due(box, last_reviewed, today):
-            due.append({
-                "motif": motif,
-                "box": box,
-                "last_reviewed": last_reviewed,
-                "cursor_key": row["cursor_key"] if row else None,
-                "pool_size": len(pool[motif]),
-            })
+    due = [s for s in _bucket_states(pool, boxes, today) if s["due"]]
     due = due[:SESSION_CAP]  # a reserved slot per due bucket must fit the cap
 
     # 3. Rotation candidates per due bucket.
