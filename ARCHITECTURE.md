@@ -57,6 +57,7 @@ server state.
 |---|---|
 | `app.js` | Hub: board wiring (chessground/chessops from pinned CDNs), state, tab routing |
 | `setup.js` | Pregame position editor: brush stamping, palette, castling inference |
+| `repertoire.js` | Repertoire trainer: browse tree, Jump, rep-practice + engine handoff |
 | `panel.js` | Analysis panel rendering |
 | `review.js` | Game library, replay, profile dashboard, foresight cards |
 | `insights.js` | Insights tab dashboard |
