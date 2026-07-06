@@ -186,6 +186,23 @@ def _import_games_folder() -> None:
 app = FastAPI(title="Stockfish Analysis Board", lifespan=lifespan)
 
 
+@app.middleware("http")
+async def no_store_static(request: Request, call_next):
+    """Send ``Cache-Control: no-store`` for ``/static`` and the SPA shell.
+
+    StaticFiles has no headers kwarg, so we set it here — this also covers the
+    304 Not-Modified path. Retires the manual ``?v=`` cache-buster in
+    static/index.html: stale browser-cached JS has bitten this repo before.
+    ``/`` is included so a cached index.html can never pair stale markup with
+    fresh JS (a DOM-id mismatch that no ``/static`` header alone prevents).
+    """
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.startswith("/static"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 def get_engine(request: Request) -> StockfishEngine:
     """Dependency: the app's single engine instance (overridable in tests)."""
     return request.app.state.engine
