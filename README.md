@@ -1,6 +1,6 @@
-# Chess Training — Stockfish Analysis Board
+# Chess Trainer — Stockfish Analysis Board
 
-[![CI](https://github.com/jcabiles/chess-training/actions/workflows/ci.yml/badge.svg)](https://github.com/jcabiles/chess-training/actions/workflows/ci.yml)
+[![CI](https://github.com/jcabiles/chess-trainer/actions/workflows/ci.yml/badge.svg)](https://github.com/jcabiles/chess-trainer/actions/workflows/ci.yml)
 
 A local, single-user web app: an interactive chess board where you move **both
 colors** freely, jump to any position by FEN, and get **live Stockfish feedback**

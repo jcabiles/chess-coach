@@ -2,7 +2,7 @@
 
 **Status:** Reviewed (Gate 1 confirmed; refuter pass folded in)
 **Slug:** `stockfish-analysis-board`
-**Type:** Greenfield app (new repo `chess-training`)
+**Type:** Greenfield app (new repo `chess-trainer`)
 
 ## Goal (one line)
 Local single-user web app: an interactive chess board where you move both colors freely, jump to any position by FEN, and get live Stockfish feedback (eval, best move + line, move-quality label) after every move.
@@ -45,7 +45,7 @@ Default buckets (tunable constants in `analysis.py`, integer cp):
 
 ## Files / interfaces to touch (proposed layout)
 ```
-chess-training/
+chess-trainer/
   README.md                 # setup: brew install stockfish, venv, run
   requirements.txt          # fastapi, uvicorn (NO [standard] — avoid uvloop on 3.14), chess, pydantic
   app/
