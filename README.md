@@ -111,6 +111,17 @@ per-move coaching notes.
    > chess-trainer` (or `--port 8123` for the raw `uvicorn` command). Run two
    > apps at once by giving each its own port; no need to stop the other.
 
+5. **(Optional) AI game commentary** — everything else in the app is fully
+   offline; this one feature calls the Anthropic API (a few cents per game,
+   only when you click **Generate commentary** in a reviewed game):
+   ```sh
+   pip install -r requirements.txt        # picks up the anthropic SDK
+   export ANTHROPIC_API_KEY=sk-ant-...    # https://console.anthropic.com/
+   # restart the server, open a reviewed game → Generate commentary
+   ```
+   Without the key the button stays disabled and nothing ever leaves your
+   machine.
+
 ## Configuration (optional)
 
 All via environment variables; sensible defaults mean none are required to start.
@@ -123,6 +134,9 @@ All via environment variables; sensible defaults mean none are required to start
 | `REVIEW_BG_DEPTH` | `10` | Stockfish depth for background game-review analysis. Interactive moves use a deeper search; the background job yields to interactive requests so play stays responsive. |
 | `ENGINE_SOFT_TIME` | `3.0` | Soft per-search time cap (seconds) for interactive analysis: Stockfish stops at the target depth **or** this time, whichever comes first, so a sharp position can't stall the UI. |
 | `ENGINE_HARD_TIMEOUT` | `8.0` | Hard watchdog (seconds): any single engine call exceeding this auto-kills and relaunches the Stockfish process so it can never wedge. Must be greater than `ENGINE_SOFT_TIME`. |
+| `ANTHROPIC_API_KEY` | _(unset)_ | Enables the **AI game commentary** button in Review (the app's only outbound call; everything else is offline). API key only — OAuth is not supported. |
+| `NARRATIVE_MODEL` | `claude-sonnet-5` | Anthropic model used for game commentary. |
+| `NARRATIVE_TIMEOUT_S` | `60` | Hard timeout (seconds) for one commentary generation call. |
 
 Saved games and their analysis live in `data/games.db` (and any PGNs you drop in
 `data/games/`) — both gitignored, never committed.
@@ -178,7 +192,13 @@ The opening trainer uses the bundled lichess-org/chess-openings TSVs under
   Opening a reviewed game also shows an **estimated Accuracy % and Elo for both
   sides** (you and your opponent) in the review bar — Chess.com-style, derived from
   the per-move evals already computed (no extra engine work). The rating is a rough
-  single-game estimate, not an official number.
+  single-game estimate, not an official number. With an `ANTHROPIC_API_KEY` set
+  (see Setup step 5) an on-demand **AI game commentary** button appears: Claude
+  writes a chaptered story of the game plus short notes pinned to the key moves
+  (blunders on both sides, momentum swings, critical positions), grounded
+  strictly in the Stockfish facts above — the engine owns every concrete claim;
+  the LLM only narrates. Generated once per game, cached in the same database,
+  and regenerable on demand.
 - **Insights:** a read-only analytics tab over your reviewed games — opening
   performance vs your repertoire, mistake patterns by motif/phase (with
   foreseeable-blunder and time-trouble cards), and endgame conversion — each card

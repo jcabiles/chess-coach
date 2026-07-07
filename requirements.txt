@@ -5,6 +5,8 @@ fastapi>=0.110
 uvicorn>=0.29
 chess>=1.10
 pydantic>=2.6
+anthropic>=0.40    # optional at runtime — only the AI game-commentary
+                   # feature uses it (app/narrative.py, lazy import)
 
 # test-only
 pytest>=8.0
