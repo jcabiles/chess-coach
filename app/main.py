@@ -16,6 +16,7 @@ The server is stateless per request: move history / undo lives client-side.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -32,6 +33,8 @@ from app import (
     book,
     coaching,
     insights,
+    moments,
+    narrative,
     openings,
     pgn,
     profile,
@@ -65,6 +68,8 @@ from app.models import (
     MoveRequest,
     MoveResponse,
     NarratedLeak,
+    NarrativeData,
+    NarrativeStatusResponse,
     OpeningRequest,
     OpeningsInsightsResponse,
     PlyDetail,
@@ -797,6 +802,9 @@ async def analyze_game_route(
     if row is None:
         return JSONResponse(status_code=404, content={"detail": f"Game {game_id} not found."})
 
+    # Re-analysis invalidates any cached AI narrative (its facts go stale).
+    storage.delete_narrative(game_id)
+
     review.start_analysis(game_id, engine, depth=review.BACKGROUND_DEPTH)
 
     # Re-fetch status after starting (it should be 'analyzing' now).
@@ -891,6 +899,162 @@ async def get_game_review(game_id: int):
         summary = GameAccuracySummary(**accuracy.summarize(ply_rows, row.get("my_color")))
 
     return ReviewResponse(game_id=game_id, analysis_status=status, leaks=narrated, plies=plies, summary=summary)
+
+
+# --- AI game commentary (narrative) ---------------------------------------
+
+def _narrative_data_from_row(row: dict | None) -> NarrativeData | None:
+    """Parse a storage.get_narrative row into NarrativeData; None if absent/corrupt."""
+    if not row:
+        return None
+    try:
+        body = json.loads(row["narrative_json"])
+        return NarrativeData(
+            model=row["model"],
+            created_at=row["created_at"],
+            chapters=body.get("chapters", []),
+            moments=body.get("moments", []),
+            overall=body.get("overall", ""),
+        )
+    except Exception:
+        return None  # tolerate a corrupt cached row: behave as "no narrative"
+
+
+def _narrative_fingerprint(row: dict, plies: list[dict], leaks: list[dict]) -> tuple:
+    """Staleness fingerprint of a game's analysis (checked around generation)."""
+    last = plies[-1] if plies else None
+    return (
+        row.get("analysis_status") == "done",
+        len(plies),
+        last.get("eval_cp_white") if last else None,
+        last.get("mate_white") if last else None,
+        len(leaks),
+    )
+
+
+def _profile_cluster_summary(limit: int = 5) -> list[dict]:
+    """Compact cross-game top-cluster summary for the narrative prompt.
+
+    Reuses profile.py's aggregation (same qualified-game + category counting
+    as /api/profile) without building the whole ProfileResponse.
+    """
+    try:
+        game_ids = profile._qualified_game_ids()
+        raw = profile._top_leaks_by_category(game_ids, limit=limit)
+        narrator = coaching.get_narrator()
+        return [
+            {
+                "category": r["category"],
+                "count": r["count"],
+                "coach": narrator.name_cluster(r["category"], {"count": r["count"]}),
+            }
+            for r in raw
+        ]
+    except Exception:
+        return []
+
+
+@app.get("/api/games/{game_id}/narrative", response_model=NarrativeStatusResponse)
+async def get_game_narrative(game_id: int):
+    """Return the cached AI narrative (if any) and whether generation is enabled."""
+    try:
+        row = storage.get_game(game_id)
+    except Exception:
+        row = None
+    if row is None:
+        return JSONResponse(status_code=404, content={"detail": f"Game {game_id} not found."})
+    return NarrativeStatusResponse(
+        enabled=narrative.is_enabled(),
+        narrative=_narrative_data_from_row(storage.get_narrative(game_id)),
+    )
+
+
+@app.post("/api/games/{game_id}/narrative", response_model=NarrativeStatusResponse)
+async def generate_game_narrative(game_id: int):
+    """Generate (and cache) the AI narrative for an analyzed game.
+
+    Errors: 404 unknown game; 503 no ANTHROPIC_API_KEY; 409 analysis not done /
+    generation already in flight / game re-analyzed during generation;
+    422 fewer than 4 analyzed plies; 502 on API/parse failure (nothing cached).
+    """
+    try:
+        row = storage.get_game(game_id)
+    except Exception:
+        row = None
+    if row is None:
+        return JSONResponse(status_code=404, content={"detail": f"Game {game_id} not found."})
+    if not narrative.is_enabled():
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Set ANTHROPIC_API_KEY to enable AI commentary."},
+        )
+    if row.get("analysis_status") != "done":
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "Game analysis is not complete yet — analyze it first."},
+        )
+    if game_id in narrative._in_flight:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "Narrative generation already in progress for this game."},
+        )
+
+    plies = storage.get_plies(game_id)
+    if len(plies) < 4:
+        return JSONResponse(status_code=422, content={"detail": "not enough analyzed moves"})
+    leaks = storage.get_leaks(game_id)
+    fingerprint = _narrative_fingerprint(row, plies, leaks)
+
+    # Facts-only payload for the LLM (see app/moments.py docstring).
+    acc = accuracy.summarize(plies, row.get("my_color"))
+    header = {
+        "white": row.get("white"),
+        "black": row.get("black"),
+        "my_color": row.get("my_color"),
+        "opening": row.get("opening"),
+        "eco": row.get("eco"),
+        "result": row.get("result"),
+        "date": row.get("date"),
+        "accuracy": acc,
+    }
+    epds = [moments._epd(p.get("fen_before")) for p in plies]
+    pos_by_epd = storage.get_pos_cache_many([e for e in epds if e])
+    payload = moments.extract_moments(
+        plies,
+        leaks,
+        pos_by_epd,
+        row.get("my_color"),
+        profile_context={"header": header, "clusters": _profile_cluster_summary()},
+    )
+
+    # No await between the membership check above and this add, so the
+    # check-then-add pair is atomic on the event loop.
+    narrative._in_flight.add(game_id)
+    try:
+        data = await narrative.generate(payload)
+    except narrative.NarrativeUnavailable as exc:
+        return JSONResponse(status_code=502, content={"detail": str(exc)})
+    finally:
+        narrative._in_flight.discard(game_id)
+
+    # Staleness re-check: a re-analysis may have run while the API call was
+    # in flight. On any drift, discard the result (no cache write).
+    row_after = storage.get_game(game_id)
+    if row_after is None or _narrative_fingerprint(
+        row_after, storage.get_plies(game_id), storage.get_leaks(game_id)
+    ) != fingerprint:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "game re-analyzed during generation — retry"},
+        )
+
+    model = narrative.model_name()
+    created_at = datetime.now(timezone.utc).isoformat()
+    storage.upsert_narrative(game_id, model, json.dumps(data), created_at)
+    return NarrativeStatusResponse(
+        enabled=True,
+        narrative=NarrativeData(model=model, created_at=created_at, **data),
+    )
 
 
 @app.delete("/api/games/{game_id}")

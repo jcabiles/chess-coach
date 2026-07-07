@@ -23,3 +23,13 @@ def _skip_engine_autostart():
         os.environ.pop("CHESS_SKIP_ENGINE_AUTOSTART", None)
     else:
         os.environ["CHESS_SKIP_ENGINE_AUTOSTART"] = prev
+
+
+@pytest.fixture(autouse=True)
+def _clear_narrative_in_flight():
+    """Never leak the narrative in-flight guard across tests (same discipline
+    as the manual review._tasks cleanup in tests/test_review.py)."""
+    yield
+    from app import narrative
+
+    narrative._in_flight.clear()

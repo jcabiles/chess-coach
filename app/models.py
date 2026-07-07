@@ -368,6 +368,39 @@ class ReviewResponse(BaseModel):
     summary: GameAccuracySummary | None = None
 
 
+class NarrativeChapter(BaseModel):
+    """One phase chapter of the AI game commentary."""
+
+    phase: str = Field(description="'opening' | 'middlegame' | 'endgame'.")
+    text: str
+
+
+class NarrativeMoment(BaseModel):
+    """A 1-2 sentence commentary card tied to a specific ply."""
+
+    ply: int
+    text: str
+
+
+class NarrativeData(BaseModel):
+    """A cached AI-generated narrative for one analyzed game."""
+
+    model: str = Field(description="Anthropic model that generated the narrative.")
+    created_at: str = Field(description="UTC ISO timestamp of generation.")
+    chapters: list[NarrativeChapter] = Field(default_factory=list)
+    moments: list[NarrativeMoment] = Field(default_factory=list)
+    overall: str = ""
+
+
+class NarrativeStatusResponse(BaseModel):
+    """Response for GET/POST ``/api/games/{game_id}/narrative``."""
+
+    enabled: bool = Field(
+        description="Whether narrative generation is available (ANTHROPIC_API_KEY set)."
+    )
+    narrative: NarrativeData | None = None
+
+
 class AnalyzeStatusResponse(BaseModel):
     """Response for ``GET /api/games/{game_id}/status``."""
 
