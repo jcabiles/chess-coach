@@ -688,6 +688,39 @@ function ensurePlay() {
   if (h && h.exit) h.exit();
 }
 
+// Per-mode confirm copy (only for modes that register isDirty and report dirty)
+// and the contextual line shown in #mode-indicator while the mode is active.
+const MODE_CONFIRM = {
+  setup: 'Leave setup? Your in-progress position will be discarded.',
+  'rep-practice': 'Leave this practice line? Your progress in it will be lost.',
+  'blunder-practice': 'Leave this drill? Progress on the current puzzle is lost.',
+};
+const MODE_INDICATOR = {
+  setup: 'Setting up a position — pick any tab to leave setup.',
+  'trap-watch': 'Watching a trap — pick any tab to leave.',
+  'trap-practice': 'Practising a trap — pick any tab to leave.',
+  'rep-practice': 'Practising a prepared line — pick any tab to leave.',
+  'blunder-practice': 'In a blunder drill — pick any tab to leave.',
+  review: 'Reviewing a saved game — pick any tab to leave.',
+};
+
+// Attempt to leave the current special mode back to play so a tab switch (or any
+// caller) can proceed. Returns true if we end up in play (already were, or the
+// exit ran), false only if the user cancels a dirty-mode confirm. Routes through
+// the registered exit() via ensurePlay() so mode side effects are preserved
+// (e.g. exitTrainer's Leitner flush) — never a bare setMode('play').
+function requestModeExit() {
+  const mode = state.mode;
+  if (mode === 'play') return true;
+  const h = _modeHandlers[mode];
+  const dirty = h && h.isDirty ? h.isDirty() : false;
+  if (dirty && !window.confirm(MODE_CONFIRM[mode] || 'Leave this mode? Your progress here will be lost.')) {
+    return false;
+  }
+  ensurePlay();
+  return true;
+}
+
 
 // --- review mode -----------------------------------------------------------
 //
@@ -781,6 +814,12 @@ function exitReview() {
   persist();
 }
 
+// Review's enter/exit live in the hub (not a feature module), so register its
+// exit here — this lets ensurePlay()/requestModeExit() dispatch review uniformly
+// with every other special mode. Review replay is cheap (only a ply cursor), so
+// isDirty is always false → a tab switch leaves review without a confirm.
+registerModeHandlers('review', { exit: exitReview, isDirty: () => false });
+
 // --- init ------------------------------------------------------------------
 
 function init() {
@@ -864,6 +903,7 @@ function init() {
       getPlaySnapshot,
       setPlaySnapshot,
       ensurePlay,
+      requestModeExit,
       registerModeHandlers,
       isPromotion,
       askPromotion,
@@ -887,13 +927,17 @@ function init() {
   // repertoire.js, and traps.js each register their own inside initX(api).)
 
   // Tab-switch wiring: clicking a [data-tab] button activates the matching panel.
-  // No-op outside 'play' mode; null-guarded if #panel-tabs is absent.
+  // In a special mode the tab strip is still shown, so leave that mode first
+  // (confirming if it has meaningful in-progress state); bail if the user
+  // cancels. After a successful exit we are synchronously back in play mode and
+  // fall through to the normal activation below. Null-guarded if #panel-tabs is
+  // absent.
   const tabsEl = api.mounts.tabs;
   if (tabsEl) {
     tabsEl.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-tab]');
       if (!btn) return;
-      if (document.body.dataset.mode !== 'play') return;
+      if (document.body.dataset.mode !== 'play' && !requestModeExit()) return;
       const tabName = btn.dataset.tab;
 
       // Deactivate all tab buttons and panels, activate the clicked one.
@@ -907,6 +951,18 @@ function init() {
         if (panel) panel.classList.toggle('is-active', name === tabName);
       });
     });
+  }
+
+  // Mode indicator: show a contextual line in the panel while a special mode is
+  // active (:empty CSS hides it in play). Set on every mode:change plus once now
+  // to cover a session restored directly into a special mode.
+  const indicatorEl = byId('mode-indicator');
+  if (indicatorEl) {
+    const paintIndicator = (mode) => {
+      indicatorEl.textContent = mode === 'play' ? '' : (MODE_INDICATOR[mode] || '');
+    };
+    on('mode:change', paintIndicator);
+    paintIndicator(state.mode);
   }
 
   // Init modules AFTER ground is created so api.getGround() returns a live instance.
