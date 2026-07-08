@@ -627,9 +627,14 @@ function renderAnalyzingNote(message) {
 async function loadReviewData(gameId) {
   try {
     _reviewData = await fetchJSON(`/api/games/${gameId}/review`);
-    // Trigger foresight render for current ply (which is 0 at entry).
+    // Trigger foresight + stored-eval render for current ply (0 at entry). The
+    // data lands asynchronously after enterReview, so this is the first chance
+    // to paint the real eval — before this the panel shows stale play analysis.
     const currentState = _api && _api.actions && _api.actions.getState();
-    if (currentState) renderForesight(currentState.cursor);
+    if (currentState) {
+      renderForesight(currentState.cursor);
+      renderReplayEval(currentState.cursor);
+    }
     renderGameSummary(_reviewData && _reviewData.summary ? _reviewData.summary : null);
   } catch (_) {
     _reviewData = null;
@@ -698,6 +703,29 @@ function renderGameSummary(summary) {
 
   el_.replaceChildren(buildSide(first), buildSide(second));
   el_.hidden = false;
+}
+
+// ---------------------------------------------------------------------------
+// Replay eval — paint the STORED per-ply eval into the analysis panel + eval
+// bar for the current replay position. review mode never re-runs the live
+// engine (goto skips refreshAnalysis), so without this the panel stays frozen
+// on whatever it last showed. `eval_cp_white` is the eval of that ply's
+// `fen_before` (position BEFORE the move), and the plies array is ply-ordered,
+// so plies[cursor] is exactly the position at `cursor` (after `cursor` plies).
+// The final position (cursor === plies.length) and any ply skipped by
+// analyze-my-color (eval_cp_white === null) render as a neutral bar + '—'.
+// best-move / PV aren't stored per ply, so renderAnalysis shows '—' for them.
+// ---------------------------------------------------------------------------
+
+function renderReplayEval(cursor) {
+  if (!_api || !_api.hub || typeof _api.hub.renderAnalysis !== 'function') return;
+  const plies = _reviewData && _reviewData.plies;
+  if (!plies) return; // review data not loaded yet — leave the panel untouched
+  const ply = plies[cursor];
+  const a = (ply && (ply.eval_cp_white != null || ply.mate_white != null))
+    ? { evalCp: ply.eval_cp_white ?? null, mate: ply.mate_white ?? null }
+    : null;
+  _api.hub.renderAnalysis(a);
 }
 
 // ---------------------------------------------------------------------------
@@ -1100,10 +1128,11 @@ function onKeyDown(e) {
 export function initReview(api) {
   _api = api;
 
-  // Subscribe to review:ply to drive foresight cards.
+  // Subscribe to review:ply to drive foresight cards + the stored-eval readout.
   if (api && api.on) {
     api.on('review:ply', (ply) => {
       renderForesight(ply);
+      renderReplayEval(ply);
     });
   }
 

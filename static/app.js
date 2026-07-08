@@ -895,6 +895,7 @@ function init() {
       syncBoard,
       postJSON,
       refreshAnalysis,
+      renderAnalysis,       // paint a {evalCp,mate,...} object into the panel (review replay uses stored evals)
       persist,
       setMode,
       setStatus,
