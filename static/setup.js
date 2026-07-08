@@ -226,5 +226,8 @@ export function initSetup(api) {
   });
 
   // The hub's dispatcher and ensurePlay() route through this registration.
-  api.hub.registerModeHandlers('setup', { exit: cancelSetup });
+  // isDirty is always true: a setup position has no dirty-tracking (we can't tell
+  // an untouched board from a carefully-arranged one), so leaving via a tab click
+  // always confirms rather than silently discarding the placement.
+  api.hub.registerModeHandlers('setup', { exit: cancelSetup, isDirty: () => true });
 }

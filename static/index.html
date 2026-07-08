@@ -220,6 +220,12 @@
         <button id="tab-btn-insights" role="tab" data-tab="insights" aria-selected="false" aria-controls="tab-insights">Insights</button>
       </div>
 
+      <!-- Special-mode indicator: fills the tab strip while a mode is active and
+           tells the user a tab click leaves it. Sibling of the tablist (NOT a
+           tab-role child), empty + hidden in play mode. Text set by app.js on
+           mode:change; aria-live so the mode change is announced. -->
+      <div id="mode-indicator" class="mode-indicator" aria-live="polite"></div>
+
       <!-- Analysis tab -->
       <div id="tab-analysis" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-btn-analysis">
         <div id="analysis-status" class="analysis-status"></div>
