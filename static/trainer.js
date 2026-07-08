@@ -609,7 +609,15 @@ export function initTrainer(api) {
   byId('trainer-next').addEventListener('click', onNextClick);
 
   // The hub's dispatcher and ensurePlay() route through this registration.
-  api.hub.registerModeHandlers('blunder-practice', { onMove: onTrainerMove, exit: exitTrainer });
+  // isDirty while a puzzle is unresolved ('moving'/'checking'). Already-resolved
+  // puzzles ('solved'/'revealed'/'summary') and the transient auto-skip
+  // ('advancing') aren't worth a confirm — and exitTrainer flushes Leitner
+  // outcomes regardless, so the predicate only gates the dialog, never the flush.
+  api.hub.registerModeHandlers('blunder-practice', {
+    onMove: onTrainerMove,
+    exit: exitTrainer,
+    isDirty: () => !!(drill && (drill.phase === 'moving' || drill.phase === 'checking')),
+  });
 
   // Initial Train-section render (idempotent preview — safe on every call).
   refreshTrainSection();

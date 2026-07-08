@@ -548,23 +548,35 @@ body.setup-mode #fen-error { display: none; }
 /* ---- Tab panels: non-active hidden ---- */
 [role="tabpanel"]:not(.is-active) { display: none; }
 
-/* ---- data-mode: in non-play modes the panel UI lives BELOW the board
-   (setup-bar / trap-bar / rep-bar). Hide the right panel entirely and collapse
-   to a single board column — no empty box, no contradictory play-mode eval, and
-   the board gets the room. Reverts automatically in play mode. ---- */
-body[data-mode="setup"] main,
-body[data-mode="trap-watch"] main,
-body[data-mode="trap-practice"] main,
-body[data-mode="rep-practice"] main {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-body[data-mode="setup"] .panel,
-body[data-mode="trap-watch"] .panel,
-body[data-mode="trap-practice"] .panel,
-body[data-mode="rep-practice"] .panel {
+/* ---- data-mode: in special modes each mode's own bar still lives BELOW the
+   board (setup-bar / trap-bar / rep-bar / trainer-bar), but the tab strip stays
+   visible in the panel so tabs are reachable from EVERY mode. Keep the two-column
+   layout and the panel shown; hide only the tab-panel *contents* (no contradictory
+   play-mode eval). The mode indicator below the strip explains a tab click leaves
+   the mode. Reverts automatically in play mode. (blunder-practice included here so
+   all special modes share one rule.) ---- */
+body[data-mode="setup"] .tab-panel,
+body[data-mode="trap-watch"] .tab-panel,
+body[data-mode="trap-practice"] .tab-panel,
+body[data-mode="rep-practice"] .tab-panel,
+body[data-mode="blunder-practice"] .tab-panel {
   display: none;
 }
+
+/* Mode indicator: contextual line filling the panel in special modes; app.js
+   sets its text on mode:change and clears it in play. :empty hides it so play
+   mode shows no empty box. */
+.mode-indicator {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  background: var(--accent-dim);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.mode-indicator:empty { display: none; }
 
 /* ============================================================
    Section label

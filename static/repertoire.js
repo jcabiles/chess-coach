@@ -413,7 +413,13 @@ export function initRepertoire(api) {
   byId('rep-restart').addEventListener('click', repRestart);
 
   // The hub's dispatcher and ensurePlay() route through this registration.
-  api.hub.registerModeHandlers('rep-practice', { onMove: onRepMove, exit: exitRepPractice });
+  // isDirty once at least one move has been played in the line — a started line
+  // is worth a confirm on a tab-away; a fresh line (no moves) leaves silently.
+  api.hub.registerModeHandlers('rep-practice', {
+    onMove: onRepMove,
+    exit: exitRepPractice,
+    isDirty: () => !!(rep && rep.moves && rep.moves.length > 0),
+  });
 
   // Load browse data (non-blocking — section degrades gracefully).
   loadRepertoire();

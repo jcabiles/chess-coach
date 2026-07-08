@@ -170,16 +170,10 @@ body.trainer-mode #setup-toggle,
 body.trainer-mode .fen-row,
 body.trainer-mode #fen-error { display: none; }
 
-/* In blunder-practice the panel UI lives below the board: hide the right
-   panel and collapse to a single board column (same rule the other
-   non-play modes get in style.css). */
-body[data-mode="blunder-practice"] main {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-body[data-mode="blunder-practice"] .panel {
-  display: none;
-}
+/* blunder-practice keeps the tab strip visible like every other special mode —
+   the shared rule in style.css hides only its .tab-panel contents, so there is
+   no blunder-specific panel/grid override here anymore. The trainer bar still
+   renders below the board. */
 
 /* Mobile tier — match style.css's ≤560px rules for the other mode bars. */
 @media (max-width: 560px) {
