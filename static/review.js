@@ -729,7 +729,9 @@ function renderReplayEval(cursor) {
 }
 
 // ---------------------------------------------------------------------------
-// Foresight cards — shown in #review-foresight in the review-bar
+// Foresight cards — shown in #review-foresight, now in the Analysis panel's
+// review column (#analysis-review-col, right of the eval readouts), not under
+// #review-bar. AI narrative moment cards are appended here too.
 // ---------------------------------------------------------------------------
 
 function renderForesight(ply) {

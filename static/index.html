@@ -172,7 +172,6 @@
           <button id="review-return">Return to my game</button>
         </div>
         <div id="review-game-summary" class="review-game-summary" hidden></div>
-        <div id="review-foresight" class="review-foresight"></div>
       </div>
 
       <!-- Repertoire practice bar — shown only in rep-practice mode -->
@@ -275,9 +274,14 @@
             </div>
           </div>
 
-          <!-- AI game commentary (review mode only); rendered by review.js
-               renderNarrativePanel(). Sits right of the eval readouts. -->
-          <div id="review-narrative" class="review-narrative" hidden></div>
+          <!-- Review-mode coaching column: AI game commentary + pre-blunder
+               foresight/moment cards. Sits right of the eval readouts; the whole
+               column is toggled with review mode by showReviewUI() so it collapses
+               (and the eval column fills the row) in play mode. -->
+          <div id="analysis-review-col" class="analysis-review-col" hidden>
+            <div id="review-narrative" class="review-narrative" hidden></div>
+            <div id="review-foresight" class="review-foresight"></div>
+          </div>
         </div>
 
         <div class="movelist-block">
