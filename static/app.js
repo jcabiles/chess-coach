@@ -70,12 +70,17 @@ let analysisToken = 0;        // monotonic counter; stale responses are dropped
 let moveToken = 0;
 // Analyze-my-color preference: 'both' | 'white' | 'black'
 let analyzeColor = (readUiPrefs().analyzeColor) || 'both';
+// Evaluation master switch. Session-only (NOT persisted) — reload always returns to on.
+// When false, Stockfish is never called and the Analysis panel FREEZES its last eval.
+let evalEnabled = true;
 
 function shouldAnalyzeMove(moverColor) {
+  if (!evalEnabled) return false;
   return analyzeColor === 'both' || moverColor === analyzeColor;
 }
 
 function shouldAnalyzeCursor(cursor) {
+  if (!evalEnabled) return false;
   if (analyzeColor === 'both') return true;
   if (cursor === 0) return true; // cursor 0 EXEMPT — always show opening eval
   const before = positionAt(cursor - 1);
@@ -396,6 +401,9 @@ async function refreshAnalysis() {
   emit('analysis:start');
   setStatus('Analyzing…');
   try {
+    // Evaluation off → FREEZE: leave the panel's last-rendered eval untouched.
+    // Must NOT renderSkipped() (that blanks it); just clear status + balance the event.
+    if (!evalEnabled) { setStatus(''); emit('analysis:end'); return; }
     if (!shouldAnalyzeCursor(state.cursor)) { renderSkipped(); setStatus(''); emit('analysis:end'); return; }
     if (state.cursor === 0) {
       const data = await postJSON('/api/analyze', { fen: state.baseFen });
@@ -474,7 +482,9 @@ async function onUserMove(orig, dest) {
   const moverColor = before.pos.turn;
   const doAnalyze = shouldAnalyzeMove(moverColor);
 
-  setStatus('Analyzing…');
+  // Eval off still round-trips /api/move (legality + move-write), but no engine runs —
+  // so don't flash "Analyzing…". Analyze-color skip (evalEnabled, wrong color) keeps it.
+  if (evalEnabled) setStatus('Analyzing…');
   let data;
   try {
     data = await postJSON('/api/move', { fen: fenBefore, move: uci, useBook: true, analyze: doAnalyze });
@@ -523,7 +533,8 @@ async function onUserMove(orig, dest) {
   // the engine result for the wrong side. (onUserMove renders directly, outside the
   // refreshAnalysis token machinery, so it must bump the token itself.)
   analysisToken++;
-  if (doAnalyze) applyMoveResponse(data); else renderSkipped();
+  // Eval off → FREEZE (render nothing, keep last panel). Analyze-color skip → renderSkipped().
+  if (doAnalyze) applyMoveResponse(data); else if (evalEnabled) renderSkipped();
   setStatus('');
   persist();
   refreshOpeningThenTraps(); // fire-and-forget: opening then traps check, sequential
@@ -1068,6 +1079,27 @@ function init() {
       analyzeColor = analyzeColorEl.value;
       writeUiPref('analyzeColor', analyzeColor);
       refreshAnalysis();
+    });
+  }
+
+  // Evaluation on/off toggle (session-only; resets to on at reload)
+  const evalToggleEl = byId('eval-toggle');
+  if (evalToggleEl) {
+    const syncEvalToggle = () => {
+      evalToggleEl.setAttribute('aria-pressed', String(evalEnabled));
+      evalToggleEl.textContent = evalEnabled ? 'Evaluation: On' : 'Evaluation: Off';
+    };
+    syncEvalToggle(); // reflect the default (on) on first paint
+    evalToggleEl.addEventListener('click', () => {
+      evalEnabled = !evalEnabled;
+      syncEvalToggle();
+      if (evalEnabled) {
+        refreshAnalysis(); // re-enabled → catch the frozen panel up to the current position
+      } else {
+        // Off → invalidate any in-flight refreshAnalysis so its late response can't render
+        // and un-freeze the panel (same supersede signal onUserMove/loadFen use).
+        analysisToken++;
+      }
     });
   }
 
