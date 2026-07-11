@@ -42,8 +42,10 @@ changed. Browser-verified (Playwright-MCP, live server) against Verify-by 1–7:
 - Reload while off → back to On; `chess-training:ui:v1` has no eval flag (session-only). ✓
 - `:focus-visible` accent ring; 0 console errors. ✓
 
-### Out-of-scope finding (NOT this feature's bug)
-During verification, keyboard-navigation (arrow keys) render dropped a valid analysis to "—" on a
-non-book position. **Reproduced on the base branch with this feature stashed** (my gates are no-ops
-when eval is on), so it is a pre-existing render-race in `fix/analysis-render-race`/PR #44's
-`analysisToken` machinery — flagged to the user, left for that branch to own.
+### Verification note — a suspected nav bug that turned out to be a FALSE ALARM
+During verification I briefly suspected keyboard navigation dropped a valid eval to "—" on non-book
+positions. I instrumented the base branch (temp logging of myToken/token/cursor/book in
+`refreshAnalysis`) and DISPROVED it: every nav is a single refreshAnalysis and every response
+renders (book plies correctly show "—"; rapid bursts coalesce to the final position). The confusion
+came from a flaky a-pawn board-drag that kept landing on BOOK positions — which legitimately show no
+eval. No bug on `fix/analysis-render-race`; nothing to fix there.
