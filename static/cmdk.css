@@ -1,0 +1,76 @@
+/* cmdk.css — command palette (Cmd/Ctrl-K). Tokens only; both themes covered. */
+
+.cmdk {
+  width: min(560px, calc(100vw - 2 * var(--space-4)));
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+  color: var(--text);
+  box-shadow: var(--shadow-lg, 0 12px 40px rgb(0 0 0 / 0.4));
+  /* Sit high like editor palettes, not vertically centered. */
+  margin-top: 12vh;
+}
+
+.cmdk::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+#cmdk-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: transparent;
+  color: var(--text);
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-3) var(--space-4);
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+#cmdk-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+#cmdk-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.cmdk-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.cmdk-item.is-selected {
+  background: var(--accent-dim);
+  color: var(--text);
+}
+
+.cmdk-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmdk-hint {
+  flex: none;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.cmdk-empty {
+  padding: var(--space-3);
+  color: var(--muted);
+  font-size: 0.9rem;
+}

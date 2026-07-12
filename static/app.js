@@ -38,6 +38,7 @@ import { initSetup, enterSetupUI, EMPTY_PLACEMENT, INITIAL_PLACEMENT } from './s
 import { initRepertoire } from './repertoire.js';
 import { initTraps } from './traps.js';
 import { initTrainer } from './trainer.js';
+import { initCmdk } from './cmdk.js';
 
 // EMPTY_PLACEMENT / INITIAL_PLACEMENT are imported from setup.js (their home
 // since the setup-editor extraction); persist() and init() still use them.
@@ -1044,6 +1045,7 @@ function init() {
   initRepertoire(api);
   initTraps(api);
   initTrainer(api);
+  initCmdk(api);
 
   // Play controls
   byId('undo').addEventListener('click', undo);

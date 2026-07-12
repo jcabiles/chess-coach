@@ -421,6 +421,13 @@ export function initRepertoire(api) {
     isDirty: () => !!(rep && rep.moves && rep.moves.length > 0),
   });
 
+  // Command palette deep link — same entry as a line's Practice button.
+  api.on('repertoire:practice', (d) => {
+    if (d && d.lineId && (d.color === 'white' || d.color === 'black')) {
+      startRepPractice([d.lineId], d.color, d.name || '');
+    }
+  });
+
   // Load browse data (non-blocking — section degrades gracefully).
   loadRepertoire();
 }

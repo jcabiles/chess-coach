@@ -1085,3 +1085,38 @@ input[type="file"].review-file-input {
   fill: var(--accent);
   fill-opacity: 0.35;
 }
+
+/* ============================================================
+   Fetch-from-API block (lichess / chess.com) under Import PGN
+   ============================================================ */
+
+.review-fetch {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.review-fetch-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-2);
+}
+
+.review-fetch-user {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.5rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.review-fetch-user:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}

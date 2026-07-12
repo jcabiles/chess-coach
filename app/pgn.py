@@ -247,7 +247,7 @@ def _parse_one(game: chess.pgn.Game, aliases: list[str]) -> ParsedGame:
 # ---------------------------------------------------------------------------
 
 
-def parse_games(text: str) -> list[ParsedGame]:
+def parse_games(text: str, extra_aliases: list[str] | None = None) -> list[ParsedGame]:
     """Parse PGN text containing one or more games.
 
     Loops ``chess.pgn.read_game`` until it returns None (standard multi-game
@@ -256,12 +256,18 @@ def parse_games(text: str) -> list[ParsedGame]:
 
     Args:
         text: Raw PGN text (may contain one or many games).
+        extra_aliases: Extra usernames merged with the CHESS_USERNAME env
+            aliases for my-color inference. The API-fetch path passes the
+            fetched account name so its games tag correctly even when that
+            name isn't in the env var.
 
     Returns:
         A list of ``ParsedGame`` dataclasses, one per successfully parsed game.
         Empty list if the text contains no valid games.
     """
     aliases = _load_aliases()
+    if extra_aliases:
+        aliases = aliases + [a.strip() for a in extra_aliases if a and a.strip()]
     buf = io.StringIO(text)
     results: list[ParsedGame] = []
 

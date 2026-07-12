@@ -6,6 +6,8 @@
 // One-directional: review.js → api (never api.js → review.js directly).
 // Contract: never modifies the localStorage session shape, never persists review state.
 
+import { readUiPrefs, writeUiPref } from './prefs.js';
+
 const byId = (id) => document.getElementById(id);
 
 // ---------------------------------------------------------------------------
@@ -392,6 +394,79 @@ function renderImportControls() {
   });
 
   wrap.append(title, textarea, fileRow, colorRow, importBtn, importStatus);
+  wrap.appendChild(renderFetchControls());
+  return wrap;
+}
+
+// Fetch-from-API block under the paste-PGN importer. Public keyless APIs
+// only; the server tags my_color by matching the fetched username, and API
+// PGNs carry [%clk] so clock analytics light up (pasted PGNs usually don't).
+// Platform + username persist via ui-prefs so a re-render or reload keeps them.
+function renderFetchControls() {
+  const wrap = el('div', { className: 'review-fetch' });
+  const prefs = readUiPrefs();
+
+  wrap.appendChild(el('div', {
+    className: 'review-import-title',
+    textContent: 'Fetch from lichess / chess.com',
+  }));
+
+  const row = el('div', { className: 'review-fetch-row' });
+  const platformSel = el('select', { className: 'review-color-select', 'aria-label': 'Fetch platform' });
+  [['lichess', 'lichess.org'], ['chesscom', 'chess.com']].forEach(([value, text]) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = text;
+    platformSel.appendChild(opt);
+  });
+  if (prefs.fetchPlatform === 'chesscom') platformSel.value = 'chesscom';
+
+  const userInput = el('input', {
+    type: 'text',
+    className: 'review-fetch-user',
+    placeholder: 'username',
+    'aria-label': 'Fetch username',
+    autocomplete: 'off',
+    spellcheck: 'false',
+  });
+  if (typeof prefs.fetchUsername === 'string') userInput.value = prefs.fetchUsername;
+
+  const fetchBtn = el('button', { className: 'review-btn review-btn-primary', textContent: 'Fetch last 30' });
+  const status = el('div', { className: 'review-import-status' });
+
+  fetchBtn.addEventListener('click', async () => {
+    const username = userInput.value.trim();
+    if (!username) {
+      status.textContent = 'Enter a username first.';
+      status.className = 'review-import-status error';
+      return;
+    }
+    writeUiPref('fetchPlatform', platformSel.value);
+    writeUiPref('fetchUsername', username);
+    fetchBtn.disabled = true;
+    status.textContent = 'Fetching…';
+    status.className = 'review-import-status';
+    try {
+      const data = await postJSON('/api/games/fetch', {
+        platform: platformSel.value,
+        username,
+        max_games: 30,
+      });
+      status.textContent =
+        `Fetched ${data.fetched} game(s) — ${data.imported} new` +
+        (data.duplicates ? `, ${data.duplicates} already imported.` : '.');
+      status.className = 'review-import-status success';
+      await refreshLibraryAndProfile();
+    } catch (err) {
+      status.textContent = `Fetch failed: ${err.message}`;
+      status.className = 'review-import-status error';
+    } finally {
+      fetchBtn.disabled = false;
+    }
+  });
+
+  row.append(platformSel, userInput, fetchBtn);
+  wrap.append(row, status);
   return wrap;
 }
 
