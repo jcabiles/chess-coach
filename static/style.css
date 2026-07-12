@@ -972,6 +972,39 @@ body.trap-practice-mode #fen-error { display: none; }
   border-color: var(--accent);
 }
 
+/* ============================================================
+   Engine speed row (Fast / Balanced / Deep preset selector)
+   ============================================================ */
+
+.engine-speed-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-2) 0;
+}
+
+.engine-speed-select {
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.5rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease-out);
+}
+
+.engine-speed-select:hover {
+  border-color: var(--accent);
+}
+
+.engine-speed-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
 /* Evaluation on/off toggle — [aria-pressed="true"] = on (active), "false" = paused (muted) */
 .eval-toggle {
   font-size: 0.8rem;
