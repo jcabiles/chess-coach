@@ -1005,40 +1005,25 @@ body.trap-practice-mode #fen-error { display: none; }
   border-color: var(--accent);
 }
 
-/* Evaluation on/off toggle — [aria-pressed="true"] = on (active), "false" = paused (muted) */
+/* Evaluation on/off toggle — sits inline after the Evaluate select. Grey base
+   button (like Undo/Reset) when OFF; green-filled when ON. Sized to the select. */
 .eval-toggle {
-  font-size: 0.8rem;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--accent);
-  background: var(--accent-dim);
-  color: var(--accent);
-  margin: var(--space-2) 0;
-  cursor: pointer;
-  transition:
-    border-color var(--motion-fast) var(--ease-out),
-    background var(--motion-fast) var(--ease-out),
-    color var(--motion-fast) var(--ease-out);
+  padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+  margin: 0;
 }
 
-.eval-toggle:hover {
-  background: var(--accent-dim-hover);
-}
-
-.eval-toggle[aria-pressed="false"] {
-  border-color: var(--border-subtle);
-  background: transparent;
-  color: var(--text-secondary);
-}
-
-.eval-toggle[aria-pressed="false"]:hover {
+.eval-toggle[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-on);
   border-color: var(--accent);
-  color: var(--text);
+  font-weight: 700;
 }
 
-.eval-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+.eval-toggle[aria-pressed="true"]:hover {
+  filter: brightness(1.1);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 /* ============================================================
