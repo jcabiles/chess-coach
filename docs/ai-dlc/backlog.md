@@ -13,7 +13,7 @@ Impact = value to the user · Effort = build + verify cost. Ordered by rough imp
 
 | # | Item | What it is | Impact | Effort | Notes / why deferred |
 |---|------|-----------|--------|--------|----------------------|
-| 1 | **Light / system theme** | A light mode + follow-OS / manual toggle, on top of the dark default. | M | M | Cheap now that colors are OKLCH tokens — flip a `[data-theme]` scope. Deferred: user runs dark; doubles visual test surface. |
+| 1 | ~~**Light / system theme**~~ | **SHIPPED** — theme.js + #theme-toggle (system→light→dark cycle, prefs-persisted, pre-paint script, AA-verified light tokens). Landed with the Nocturne reskin (PR #41); backlog entry was stale. | — | — | Done. |
 | 2 | **Command palette (Cmd/Ctrl-K)** | Fuzzy launcher: load FEN, flip, switch mode/tab, jump to a trap/line. | M | M | Big perceived-pro upgrade for a power user; additive module + a registry of the existing actions. |
 | 3 | **Eval graph** | A line chart of the eval across the whole game (click a point → jump). | M | M | **Unblocked for saved games:** game review now stores per-ply evals (`game_plies`), so a graph over a reviewed game is a small frontend add. Live-play games still need eval history captured. |
 | 4 | **Move-list extras** | Variation tree (branches), eval-per-move sparkline/number, NAG glyphs. | M | H | Variation tree means replacing the flat `moves[]` with a tree model — touches persist/restore + the whole move pipeline. Big. |
@@ -27,6 +27,11 @@ Impact = value to the user · Effort = build + verify cost. Ordered by rough imp
 | 12 | ~~**Blunder Trainer**~~ | **SHIPPED** — see `specs/blunder-trainer.md` (Leitner SR over motif buckets, Train section in Review tab). | — | — | Done. |
 | 13 | **Game-review polish** | Self-hang (not missed-threat) narration; surface time-trouble from `%clk`; auto-fetch games from lichess/chess.com APIs. | M | M | Captured-but-unused: `game_plies.clock_centis` holds clock data; self-hang blunders currently lean on the best-move suggestion; import is manual only. |
 
+| 14 | ~~**Book-badge race on rapid move-after-reset**~~ | **FIXED** (already) — PR #44's unconditional `analysisToken++` after every committed move covers the book path; the stale reset-refresh render is token-dropped. Closed 2026-07-12 during roadmap triage. | — | — | Was: pre-existing, found during blunder-trainer verification. |
+
+> **Promoted 2026-07-12:** items #1 (light theme), #2 (command palette), #3 (eval
+> graph), #13's `%clk`/auto-fetch parts, and #14 moved to the durable roadmap —
+> see `roadmap/training-and-portfolio.md`. This file stays the un-promoted idea pool.
+
 ## How to pick up an item
 Run `/ai-dlc <item>` to turn one into requirements → spec → tickets, same as the overhaul.
-| 14 | **Book-badge race on rapid move-after-reset** | A move played while the reset position's analysis is in flight gets its Book badge overwritten by the stale eval render (book responses never bump analysisToken). | L | L | Pre-existing; found during blunder-trainer verification. Fix: bump analysisToken in onUserMove's book path or token-guard applyMoveResponse. |
