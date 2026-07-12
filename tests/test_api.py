@@ -35,12 +35,17 @@ class FakeEngine:
 
     ``analyze_call_count`` is incremented on every call to ``analyze`` so tests
     can assert the engine was or was not consulted without touching any other
-    part of the fake's contract.
+    part of the fake's contract. ``speeds`` records the speed preset of every
+    call, in order, so tests can assert defaulting + the matched-limit contract.
     """
+
+    #: Depth the fake reports back in every AnalysisResult (arbitrary, known).
+    FAKE_DEPTH = 12
 
     def __init__(self, cp: int = 20):
         self._cp = cp
         self.analyze_call_count: int = 0
+        self.speeds: list[str] = []
 
     @property
     def is_running(self) -> bool:
@@ -49,30 +54,32 @@ class FakeEngine:
     async def restart(self) -> None:
         """No-op restart for test use."""
 
-    async def analyze(self, fen: str, depth: int = 18) -> AnalysisResult:
+    async def analyze(self, fen: str, speed: str = "balanced") -> AnalysisResult:
         self.analyze_call_count += 1
+        self.speeds.append(speed)
         board = chess.Board(fen)
         score = chess_engine.PovScore(chess_engine.Cp(self._cp), chess.WHITE)
         # Render a plausible best-move SAN from the position's first legal move.
         pv = list(board.legal_moves)[:1]
         pv_san = [board.san(pv[0])] if pv else []
-        return AnalysisResult(score=score, pv=pv, pv_san=pv_san, depth=depth)
+        return AnalysisResult(score=score, pv=pv, pv_san=pv_san, depth=self.FAKE_DEPTH)
 
     async def analyze_interactive_multi(
-        self, fen: str, depth: int = 18, multipv: int = 1
+        self, fen: str, speed: str = "balanced", multipv: int = 1
     ) -> list[AnalysisResult]:
         # Counts as ONE engine call (like analyze) so call-count assertions hold.
         self.analyze_call_count += 1
+        self.speeds.append(speed)
         board = chess.Board(fen)
         score = chess_engine.PovScore(chess_engine.Cp(self._cp), chess.WHITE)
         # Distinct first move per line so a 2nd-best line is testable.
         moves = list(board.legal_moves)[:multipv]
         results = [
-            AnalysisResult(score=score, pv=[m], pv_san=[board.san(m)], depth=depth)
+            AnalysisResult(score=score, pv=[m], pv_san=[board.san(m)], depth=self.FAKE_DEPTH)
             for m in moves
         ]
         return results or [
-            AnalysisResult(score=score, pv=[], pv_san=[], depth=depth)
+            AnalysisResult(score=score, pv=[], pv_san=[], depth=self.FAKE_DEPTH)
         ]
 
 
@@ -200,6 +207,63 @@ def test_move_promotion_uci_accepted(client):
     body = r.json()
     assert body["legal"] is True
     assert body["lastMoveSan"].startswith("e8=Q")
+
+
+# --- speed preset plumbing + depth field -------------------------------------
+
+def test_move_speed_defaults_to_balanced(client):
+    """Omitted speed → both engine calls receive 'balanced'."""
+    r = client.post("/api/move", json={"fen": START_FEN, "move": "e2e4"})
+    assert r.status_code == 200
+    assert client.fake_engine.speeds == ["balanced", "balanced"]
+
+
+def test_move_speed_threaded_and_matched(client):
+    """An explicit speed reaches BOTH /api/move engine calls identically
+    (matched-limit cpLoss contract)."""
+    r = client.post(
+        "/api/move", json={"fen": START_FEN, "move": "e2e4", "speed": "fast"}
+    )
+    assert r.status_code == 200
+    assert client.fake_engine.speeds == ["fast", "fast"]
+
+
+def test_analyze_speed_accepted(client):
+    r = client.post("/api/analyze", json={"fen": START_FEN, "speed": "deep"})
+    assert r.status_code == 200
+    assert client.fake_engine.speeds == ["deep"]
+
+
+def test_analyze_speed_defaults_to_balanced(client):
+    r = client.post("/api/analyze", json={"fen": START_FEN})
+    assert r.status_code == 200
+    assert client.fake_engine.speeds == ["balanced"]
+
+
+def test_move_invalid_speed_rejected_422(client):
+    r = client.post(
+        "/api/move", json={"fen": START_FEN, "move": "e2e4", "speed": "turbo"}
+    )
+    assert r.status_code == 422
+    assert client.fake_engine.analyze_call_count == 0
+
+
+def test_analyze_invalid_speed_rejected_422(client):
+    r = client.post("/api/analyze", json={"fen": START_FEN, "speed": ""})
+    assert r.status_code == 422
+
+
+def test_move_analysis_includes_depth(client):
+    """Analysis.depth carries the reached depth of the after-position line."""
+    r = client.post("/api/move", json={"fen": START_FEN, "move": "e2e4"})
+    assert r.status_code == 200
+    assert r.json()["analysis"]["depth"] == FakeEngine.FAKE_DEPTH
+
+
+def test_analyze_analysis_includes_depth(client):
+    r = client.post("/api/analyze", json={"fen": START_FEN})
+    assert r.status_code == 200
+    assert r.json()["analysis"]["depth"] == FakeEngine.FAKE_DEPTH
 
 
 # --- engine control routes -------------------------------------------------
@@ -563,6 +627,20 @@ def _trainer_result(
     )
 
 
+class SpeedRecordingScriptedEngine(ScriptedEngine):
+    """ScriptedEngine that records the speed preset of every interactive call."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.speeds: list[str] = []
+
+    async def analyze_interactive_multi(
+        self, fen: str, speed: str = "balanced", multipv: int = 1
+    ) -> list[AnalysisResult]:
+        self.speeds.append(speed)
+        return await super().analyze_interactive_multi(fen, speed=speed, multipv=multipv)
+
+
 class UnavailableEngine:
     """Raises EngineUnavailable on any analysis call (binary absent)."""
 
@@ -571,7 +649,7 @@ class UnavailableEngine:
         return False
 
     async def analyze_interactive_multi(
-        self, fen: str, depth: int = 18, multipv: int = 1
+        self, fen: str, speed: str = "balanced", multipv: int = 1
     ) -> list[AnalysisResult]:
         raise EngineUnavailable("stockfish not installed")
 
@@ -624,6 +702,22 @@ def trainer_client(tmp_path: Path, monkeypatch):
 
 
 class TestTrainerCheck:
+    def test_check_pinned_to_balanced_speed(self, trainer_client):
+        """/api/trainer/check has no speed control — both engine calls are
+        pinned to 'balanced' (regression for the preset signature change)."""
+        gid = _seed_trainer_puzzle(START_FEN)
+        eng = SpeedRecordingScriptedEngine(
+            {START_FEN: _trainer_result(START_FEN, 30, "e2e4")}
+        )
+        c = trainer_client(engine=eng)
+        r = c.post("/api/trainer/check", json={
+            "game_id": gid, "ply": 5, "bucket": "fork",
+            "attempted_uci": "e2e4",
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["verdict"] == "solved"
+        assert eng.speeds == ["balanced", "balanced"]
+
     def test_solved_when_attempted_equals_engine_best(self, trainer_client):
         gid = _seed_trainer_puzzle(START_FEN)
         c = trainer_client({START_FEN: _trainer_result(START_FEN, 30, "e2e4")})

@@ -70,6 +70,11 @@ let analysisToken = 0;        // monotonic counter; stale responses are dropped
 let moveToken = 0;
 // Analyze-my-color preference: 'both' | 'white' | 'black'
 let analyzeColor = (readUiPrefs().analyzeColor) || 'both';
+// Engine speed preset: 'fast' | 'balanced' | 'deep'. Persisted (like analyzeColor).
+// Sent on every /api/move and /api/analyze call in this module's play-mode path.
+const VALID_ENGINE_SPEEDS = ['fast', 'balanced', 'deep'];
+const _savedSpeed = readUiPrefs().engineSpeed;
+let engineSpeed = VALID_ENGINE_SPEEDS.includes(_savedSpeed) ? _savedSpeed : 'balanced';
 // Evaluation master switch. Session-only (NOT persisted) — reload always returns to on.
 // When false, Stockfish is never called and the Analysis panel FREEZES its last eval.
 let evalEnabled = true;
@@ -406,7 +411,7 @@ async function refreshAnalysis() {
     if (!evalEnabled) { setStatus(''); emit('analysis:end'); return; }
     if (!shouldAnalyzeCursor(state.cursor)) { renderSkipped(); setStatus(''); emit('analysis:end'); return; }
     if (state.cursor === 0) {
-      const data = await postJSON('/api/analyze', { fen: state.baseFen });
+      const data = await postJSON('/api/analyze', { fen: state.baseFen, speed: engineSpeed });
       if (myToken !== analysisToken) { emit('analysis:end'); return; } // stale — drop
       renderAnalysis(data.analysis);
     } else {
@@ -415,6 +420,7 @@ async function refreshAnalysis() {
         fen: fenOf(before.pos),
         move: state.moves[state.cursor - 1],
         useBook: true,
+        speed: engineSpeed,
       });
       if (myToken !== analysisToken) { emit('analysis:end'); return; } // stale — drop
       applyMoveResponse(data);
@@ -487,7 +493,7 @@ async function onUserMove(orig, dest) {
   if (evalEnabled) setStatus('Analyzing…');
   let data;
   try {
-    data = await postJSON('/api/move', { fen: fenBefore, move: uci, useBook: true, analyze: doAnalyze });
+    data = await postJSON('/api/move', { fen: fenBefore, move: uci, useBook: true, analyze: doAnalyze, speed: engineSpeed });
   } catch (err) {
     // A stale failure (move already abandoned mid-flight) must not stomp the status
     // bar with an error — the navigating action owns the status line now.
@@ -1078,6 +1084,21 @@ function init() {
     analyzeColorEl.addEventListener('change', () => {
       analyzeColor = analyzeColorEl.value;
       writeUiPref('analyzeColor', analyzeColor);
+      refreshAnalysis();
+    });
+  }
+
+  // Engine speed preset selector (Fast / Balanced / Deep)
+  const engineSpeedEl = byId('engine-speed');
+  if (engineSpeedEl) {
+    engineSpeedEl.value = engineSpeed;
+    engineSpeedEl.addEventListener('change', () => {
+      engineSpeed = engineSpeedEl.value;
+      writeUiPref('engineSpeed', engineSpeed);
+      // Same supersede-then-refresh pattern as the eval toggle's re-enable path:
+      // invalidate any in-flight refreshAnalysis so its late (old-speed) response
+      // can't race the new one, then re-evaluate the current position at the new speed.
+      analysisToken++;
       refreshAnalysis();
     });
   }

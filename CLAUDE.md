@@ -46,9 +46,13 @@ pytest tests/test_api.py::test_move_legal_labels_quality   # a single test
   **gitignored**; never commit it.
 - `app/engine.py`: one Stockfish process, all access serialized behind a single
   `asyncio.Lock` (SimpleEngine isn't thread-safe). Import-safe if the binary is
-  absent (`EngineUnavailable`). `analyze_multi(fen, depth, multipv)` shares the same
-  lock; the review job funnels through it and yields to interactive `/api/move`
-  (via `review.note_interactive_start/end`).
+  absent (`EngineUnavailable`). Interactive analyses use `SPEED_PRESETS` node
+  budgets (`speed` request field: fast/balanced/deep; both `/api/move` evals must
+  share one preset — matched-limit cpLoss contract); `analyze_multi(fen, depth,
+  multipv)` stays depth-only for reviews and shares the same lock; the review job
+  funnels through it and yields to interactive `/api/move` (via
+  `review.note_interactive_start/end`). Never pass `game=`/send `ucinewgame`
+  casually — it cold-starts the warm transposition table.
 - `app/analysis.py` (plus `motifs.py`, `pgn.py`, `accuracy.py`, `endgame.py`) are
   **pure**; `coaching.py` is pure logic (imports only storage's `LeakRecord` type);
   `profile.py`/`insights.py` are engine-free read-models over SQLite. All are

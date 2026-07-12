@@ -13,6 +13,9 @@ from pydantic import BaseModel, Field
 # Move-quality buckets derived from centipawn loss (see spec classification).
 Quality = Literal["best", "good", "inaccuracy", "mistake", "blunder"]
 
+# Interactive engine speed presets (server-owned Limit table in app/engine.py).
+Speed = Literal["fast", "balanced", "deep"]
+
 
 class BestLine(BaseModel):
     """A single ranked engine line (best-first). Used for the 2nd-best move and
@@ -99,6 +102,11 @@ class Analysis(BaseModel):
         description="2nd-best line for the retrospective (pre-move) position; None "
         "when unavailable.",
     )
+    depth: int | None = Field(
+        default=None,
+        description="Search depth the engine reached for the primary line of the "
+        "resulting position; None when the engine did not report one.",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -139,12 +147,22 @@ class MoveRequest(BaseModel):
         "the opponent's move). The move is still validated for legality. "
         "Default True preserves current behavior.",
     )
+    speed: Speed = Field(
+        default="balanced",
+        description="Engine speed preset for both analyses of this move "
+        "(before + after always use the identical preset — matched-limit "
+        "cpLoss contract).",
+    )
 
 
 class AnalyzeRequest(BaseModel):
     """Body for ``POST /api/analyze`` — a position to analyze (no prior move)."""
 
     fen: str = Field(description="Position to analyze, in FEN.")
+    speed: Speed = Field(
+        default="balanced",
+        description="Engine speed preset for this analysis.",
+    )
 
 
 class LoadRequest(BaseModel):
