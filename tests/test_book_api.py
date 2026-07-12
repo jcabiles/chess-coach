@@ -28,12 +28,12 @@ class BoomEngine:
     def __init__(self) -> None:
         self.calls = 0
 
-    async def analyze(self, fen: str, depth: int = 18):
+    async def analyze(self, fen: str, speed: str = "balanced"):
         self.calls += 1
         raise EngineUnavailable("engine was called")
 
     async def analyze_interactive_multi(
-        self, fen: str, depth: int = 18, multipv: int = 1
+        self, fen: str, speed: str = "balanced", multipv: int = 1
     ):
         # make_move funnels through here now; still a "boom" — proves the book
         # fast-path skipped the engine when calls stays 0.

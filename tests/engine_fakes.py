@@ -127,10 +127,10 @@ class ScriptedEngine:
     async def analyze(
         self,
         fen: str,
-        depth: int = DEFAULT_DEPTH,
+        speed: str = "balanced",
     ) -> AnalysisResult:
         """Return the first (best) scripted line for *fen*, or the default."""
-        lines = await self.analyze_multi(fen, depth=depth, multipv=1)
+        lines = await self.analyze_multi(fen, multipv=1)
         return lines[0]
 
     async def analyze_multi(
@@ -156,8 +156,8 @@ class ScriptedEngine:
     async def analyze_interactive_multi(
         self,
         fen: str,
-        depth: int = DEFAULT_DEPTH,
+        speed: str = "balanced",
         multipv: int = 1,
     ) -> List[AnalysisResult]:
         """Interactive multipv — scripted identically to ``analyze_multi``."""
-        return await self.analyze_multi(fen, depth=depth, multipv=multipv)
+        return await self.analyze_multi(fen, multipv=multipv)

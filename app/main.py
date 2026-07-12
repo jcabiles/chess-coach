@@ -325,6 +325,7 @@ def _build_analysis(
         secondLine=_to_best_line(second_line),
         retroBest=_to_best_line(retro_best),
         retroSecond=_to_best_line(retro_second),
+        depth=result.depth,
     )
 
 
@@ -353,7 +354,7 @@ async def analyze_position(
     except ValueError:
         return JSONResponse(status_code=400, content={"detail": "Invalid FEN."})
     try:
-        result = await engine.analyze(req.fen)
+        result = await engine.analyze(req.fen, speed=req.speed)
     except EngineUnavailable:
         return _engine_unavailable_response()
     return AnalyzeResponse(analysis=_build_analysis(result, quality=None))
@@ -367,6 +368,8 @@ async def load_fen(req: LoadRequest, engine: StockfishEngine = Depends(get_engin
     except ValueError as exc:
         return LoadResponse(valid=False, fen=None, analysis=None, error=f"Invalid FEN: {exc}")
     try:
+        # LoadRequest carries no speed control — pinned to the engine default
+        # (balanced) preset.
         result = await engine.analyze(board.fen())
     except EngineUnavailable:
         return _engine_unavailable_response()
@@ -382,8 +385,9 @@ async def load_fen(req: LoadRequest, engine: StockfishEngine = Depends(get_engin
 async def make_move(req: MoveRequest, engine: StockfishEngine = Depends(get_engine)):
     """Validate + apply a move, then analyze before/after and label its quality.
 
-    Runs two depth-pinned analyses (before and after the move) so the cpLoss is
-    computed from comparable evals. Returns the resulting position's analysis.
+    Runs two analyses at the identical speed preset (before and after the move)
+    so the cpLoss is computed from comparable evals. Returns the resulting
+    position's analysis.
     """
     # Parse the position. A bad FEN means we can't validate the move → illegal.
     try:
@@ -437,8 +441,14 @@ async def make_move(req: MoveRequest, engine: StockfishEngine = Depends(get_engi
         # multipv=2 surfaces a 2nd-best line for both positions WITHOUT adding an
         # engine call (still exactly two). before_lines[0] is what the mover should
         # have played (retrospective); after_lines[0] is the current best (unchanged).
-        before_lines = await engine.analyze_interactive_multi(fen_before, multipv=2)
-        after_lines = await engine.analyze_interactive_multi(fen_after, multipv=2)
+        # Both calls MUST use the identical speed preset — matched-limit cpLoss
+        # contract (analysis.py classify assumes comparable before/after evals).
+        before_lines = await engine.analyze_interactive_multi(
+            fen_before, speed=req.speed, multipv=2
+        )
+        after_lines = await engine.analyze_interactive_multi(
+            fen_after, speed=req.speed, multipv=2
+        )
     except EngineUnavailable:
         return _engine_unavailable_response()
     finally:
@@ -1320,8 +1330,14 @@ async def check_trainer_move(
     # outside the top-K lines.
     review.note_interactive_start()
     try:
-        before_lines = await engine.analyze_interactive_multi(fen_before, multipv=1)
-        after_lines = await engine.analyze_interactive_multi(fen_after, multipv=1)
+        # No speed control here — trainer checks are pinned to the balanced
+        # preset (matched pair, same limit for both calls).
+        before_lines = await engine.analyze_interactive_multi(
+            fen_before, speed="balanced", multipv=1
+        )
+        after_lines = await engine.analyze_interactive_multi(
+            fen_after, speed="balanced", multipv=1
+        )
     except EngineUnavailable:
         return _engine_unavailable_response()
     finally:
