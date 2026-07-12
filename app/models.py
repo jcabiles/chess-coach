@@ -276,6 +276,25 @@ class ImportRequest(BaseModel):
     )
 
 
+class FetchRequest(BaseModel):
+    """Body for ``POST /api/games/fetch`` — pull recent games from a public API."""
+
+    platform: Literal["lichess", "chesscom"] = Field(
+        description="Which public API to fetch from."
+    )
+    username: str = Field(
+        min_length=1,
+        max_length=100,
+        description="Account name on that platform. Also used for my-color inference.",
+    )
+    max_games: int = Field(
+        default=30,
+        ge=1,
+        le=100,
+        description="How many most-recent games to fetch (server caps at 100).",
+    )
+
+
 class GameSummary(BaseModel):
     """One row from the games table — lightweight, for list views."""
 
@@ -337,6 +356,12 @@ class ImportResponse(BaseModel):
     games: list[GameSummary] = Field(
         description="Summaries of all games in the import batch (new + duplicates)."
     )
+
+
+class FetchResponse(ImportResponse):
+    """Response for ``POST /api/games/fetch`` — import counts plus fetch size."""
+
+    fetched: int = Field(description="Number of games the platform API returned.")
 
 
 class NarratedLeak(BaseModel):
