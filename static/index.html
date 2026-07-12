@@ -51,6 +51,7 @@
   <link rel="stylesheet" href="/static/review.css" />
   <link rel="stylesheet" href="/static/insights.css" />
   <link rel="stylesheet" href="/static/trainer.css" />
+  <link rel="stylesheet" href="/static/cmdk.css" />
 
   <!-- Lucide icons via esm.sh — replaces HTML-entity glyphs on nav buttons -->
   <script type="module">
@@ -371,6 +372,15 @@
 
   <!-- Toasts container (fixed, top-right) -->
   <div id="toasts"></div>
+
+  <!-- Command palette (Cmd/Ctrl-K) — built + wired by cmdk.js -->
+  <dialog id="cmdk" class="cmdk" aria-label="Command palette">
+    <input id="cmdk-input" type="text" role="combobox" aria-expanded="true"
+           aria-controls="cmdk-list" aria-label="Search commands"
+           placeholder="Type a command… (tabs, board, traps, repertoire)"
+           autocomplete="off" spellcheck="false" />
+    <ul id="cmdk-list" role="listbox" aria-label="Commands"></ul>
+  </dialog>
 
   <!-- Promotion picker — native dialog replaces the old overlay div -->
   <dialog id="promo-dialog" class="promo-dialog">

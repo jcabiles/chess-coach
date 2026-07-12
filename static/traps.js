@@ -739,6 +739,10 @@ export function initTraps(api) {
   // two network calls never burst simultaneously); the chip check runs then.
   api.on('traps:check', refreshTrapsAvailable);
 
+  // Command palette deep link — same entry as clicking a trap in the browse
+  // list or the chip's Drill button.
+  api.on('traps:open', (trapId) => { if (trapId) enterTrap(trapId); });
+
   // Load browse data (non-blocking — the section degrades gracefully).
   loadTraps();
 }
