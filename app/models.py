@@ -11,7 +11,12 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 # Move-quality buckets derived from centipawn loss (see spec classification).
-Quality = Literal["best", "good", "inaccuracy", "mistake", "blunder"]
+# "checkmate"/"draw" are terminal-state labels set by the API when a move ends
+# the game — NOT classify() cpLoss buckets (a terminal position has a degenerate
+# engine eval, so it never runs through classify).
+Quality = Literal[
+    "best", "good", "inaccuracy", "mistake", "blunder", "checkmate", "draw"
+]
 
 # Interactive engine speed presets (server-owned Limit table in app/engine.py).
 Speed = Literal["fast", "balanced", "deep"]
