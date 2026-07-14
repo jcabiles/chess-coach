@@ -32,6 +32,7 @@ from app import (
     accuracy,
     book,
     coaching,
+    fetch,
     insights,
     moments,
     narrative,
@@ -57,6 +58,8 @@ from app.models import (
     EndgameInsightsResponse,
     EngineRestartResponse,
     EngineStatusResponse,
+    FetchRequest,
+    FetchResponse,
     GameAccuracySummary,
     GameDetail,
     GameSummary,
@@ -635,19 +638,23 @@ def _game_summary(row: dict) -> GameSummary:
 # /api/games/{game_id} so FastAPI never interprets the literal segment as an
 # integer game_id.  Order: import → retag-color → analyze-all → {game_id}/*.
 
-@app.post("/api/games/import", response_model=ImportResponse)
-async def import_games(req: ImportRequest, engine: StockfishEngine = Depends(get_engine)):
-    """Import one or more PGN games from pasted text.
+async def _import_pgn_batch(
+    pgn_text: str,
+    my_color_override: str | None,
+    engine: StockfishEngine,
+    source: str = "import",
+    extra_aliases: list[str] | None = None,
+) -> ImportResponse | JSONResponse:
+    """Shared persist path for pasted-PGN import and API fetch.
 
-    Parses the PGN, inserts each game (deduped by content_hash), and applies
-    the optional ``my_color`` override to every game in the batch.
-    Returns imported/duplicate counts and summaries of all games in the batch.
-    Analysis of the batch starts automatically (best-effort; engine absent ⇒
-    games simply stay 'pending').
+    Parses the PGN, inserts each game (deduped by content_hash), applies the
+    optional ``my_color_override`` to every game in the batch, and kicks
+    auto-analysis. ``extra_aliases`` widen the CHESS_USERNAME my-color
+    inference (the fetch path passes the fetched account name).
     """
     now = datetime.now(timezone.utc).isoformat()
     try:
-        parsed_games = pgn.parse_games(req.pgn)
+        parsed_games = pgn.parse_games(pgn_text, extra_aliases=extra_aliases)
     except Exception as exc:
         return JSONResponse(status_code=400, content={"detail": f"PGN parse error: {exc}"})
 
@@ -657,7 +664,7 @@ async def import_games(req: ImportRequest, engine: StockfishEngine = Depends(get
 
     for g in parsed_games:
         # Apply per-request my_color override (Refuter #8).
-        my_color = req.my_color if req.my_color is not None else g.my_color
+        my_color = my_color_override if my_color_override is not None else g.my_color
         fields = {
             "content_hash": g.content_hash,
             "pgn": g.pgn,
@@ -669,7 +676,7 @@ async def import_games(req: ImportRequest, engine: StockfishEngine = Depends(get
             "opening": g.opening,
             "date": g.date,
             "my_color": my_color,
-            "source": "import",
+            "source": source,
             "ply_count": g.ply_count,
             "imported_at": now,
         }
@@ -702,6 +709,45 @@ async def import_games(req: ImportRequest, engine: StockfishEngine = Depends(get
         _kick_auto_analysis(engine)
 
     return ImportResponse(imported=imported, duplicates=duplicates, games=summaries)
+
+
+@app.post("/api/games/import", response_model=ImportResponse)
+async def import_games(req: ImportRequest, engine: StockfishEngine = Depends(get_engine)):
+    """Import one or more PGN games from pasted text.
+
+    Parses the PGN, inserts each game (deduped by content_hash), and applies
+    the optional ``my_color`` override to every game in the batch.
+    Returns imported/duplicate counts and summaries of all games in the batch.
+    Analysis of the batch starts automatically (best-effort; engine absent ⇒
+    games simply stay 'pending').
+    """
+    return await _import_pgn_batch(req.pgn, req.my_color, engine)
+
+
+@app.post("/api/games/fetch", response_model=FetchResponse)
+async def fetch_games(req: FetchRequest, engine: StockfishEngine = Depends(get_engine)):
+    """Fetch recent games from lichess / chess.com and import them.
+
+    Public keyless APIs only (no OAuth). Fetched PGNs carry ``[%clk]``
+    comments, so ``game_plies.clock_centis`` is populated — unlike most
+    hand-pasted PGNs. The fetched username joins the my-color inference
+    aliases, then the batch flows through the exact same dedupe + persist +
+    auto-analyze path as a pasted import.
+    """
+    try:
+        pgn_text = await fetch.fetch_pgn(req.platform, req.username, req.max_games)
+    except fetch.FetchError as exc:
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+    if not pgn_text.strip():
+        return FetchResponse(imported=0, duplicates=0, games=[], fetched=0)
+
+    result = await _import_pgn_batch(
+        pgn_text, None, engine, source=req.platform, extra_aliases=[req.username]
+    )
+    if isinstance(result, JSONResponse):
+        return result
+    return FetchResponse(fetched=len(result.games), **result.model_dump())
 
 
 @app.get("/api/games", response_model=list[GameSummary])

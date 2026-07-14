@@ -1033,3 +1033,90 @@ input[type="file"].review-file-input {
   line-height: 1.5;
   margin: 0;
 }
+
+/* ============================================================
+   Eval graph — whole-game eval line in the review bar
+   ============================================================ */
+
+.review-eval-graph {
+  margin-top: var(--space-2);
+}
+
+.review-eval-graph[hidden] {
+  display: none;
+}
+
+.review-eval-graph svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.reg-mid {
+  stroke: var(--border);
+  stroke-dasharray: 3 3;
+}
+
+.reg-line {
+  fill: none;
+  stroke: var(--text-secondary);
+  stroke-width: 1.5;
+}
+
+.reg-dot { stroke: none; }
+.reg-dot-blunder { fill: var(--q-blunder); }
+.reg-dot-mistake { fill: var(--q-mistake); }
+
+.reg-marker {
+  fill: var(--accent);
+  stroke: var(--surface-raised);
+  stroke-width: 1;
+}
+
+.reg-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.reg-hit:hover {
+  fill: var(--accent);
+  fill-opacity: 0.35;
+}
+
+/* ============================================================
+   Fetch-from-API block (lichess / chess.com) under Import PGN
+   ============================================================ */
+
+.review-fetch {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.review-fetch-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-2);
+}
+
+.review-fetch-user {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.5rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.review-fetch-user:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}

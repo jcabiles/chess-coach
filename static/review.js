@@ -6,6 +6,8 @@
 // One-directional: review.js → api (never api.js → review.js directly).
 // Contract: never modifies the localStorage session shape, never persists review state.
 
+import { readUiPrefs, writeUiPref } from './prefs.js';
+
 const byId = (id) => document.getElementById(id);
 
 // ---------------------------------------------------------------------------
@@ -392,6 +394,79 @@ function renderImportControls() {
   });
 
   wrap.append(title, textarea, fileRow, colorRow, importBtn, importStatus);
+  wrap.appendChild(renderFetchControls());
+  return wrap;
+}
+
+// Fetch-from-API block under the paste-PGN importer. Public keyless APIs
+// only; the server tags my_color by matching the fetched username, and API
+// PGNs carry [%clk] so clock analytics light up (pasted PGNs usually don't).
+// Platform + username persist via ui-prefs so a re-render or reload keeps them.
+function renderFetchControls() {
+  const wrap = el('div', { className: 'review-fetch' });
+  const prefs = readUiPrefs();
+
+  wrap.appendChild(el('div', {
+    className: 'review-import-title',
+    textContent: 'Fetch from lichess / chess.com',
+  }));
+
+  const row = el('div', { className: 'review-fetch-row' });
+  const platformSel = el('select', { className: 'review-color-select', 'aria-label': 'Fetch platform' });
+  [['lichess', 'lichess.org'], ['chesscom', 'chess.com']].forEach(([value, text]) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = text;
+    platformSel.appendChild(opt);
+  });
+  if (prefs.fetchPlatform === 'chesscom') platformSel.value = 'chesscom';
+
+  const userInput = el('input', {
+    type: 'text',
+    className: 'review-fetch-user',
+    placeholder: 'username',
+    'aria-label': 'Fetch username',
+    autocomplete: 'off',
+    spellcheck: 'false',
+  });
+  if (typeof prefs.fetchUsername === 'string') userInput.value = prefs.fetchUsername;
+
+  const fetchBtn = el('button', { className: 'review-btn review-btn-primary', textContent: 'Fetch last 30' });
+  const status = el('div', { className: 'review-import-status' });
+
+  fetchBtn.addEventListener('click', async () => {
+    const username = userInput.value.trim();
+    if (!username) {
+      status.textContent = 'Enter a username first.';
+      status.className = 'review-import-status error';
+      return;
+    }
+    writeUiPref('fetchPlatform', platformSel.value);
+    writeUiPref('fetchUsername', username);
+    fetchBtn.disabled = true;
+    status.textContent = 'Fetching…';
+    status.className = 'review-import-status';
+    try {
+      const data = await postJSON('/api/games/fetch', {
+        platform: platformSel.value,
+        username,
+        max_games: 30,
+      });
+      status.textContent =
+        `Fetched ${data.fetched} game(s) — ${data.imported} new` +
+        (data.duplicates ? `, ${data.duplicates} already imported.` : '.');
+      status.className = 'review-import-status success';
+      await refreshLibraryAndProfile();
+    } catch (err) {
+      status.textContent = `Fetch failed: ${err.message}`;
+      status.className = 'review-import-status error';
+    } finally {
+      fetchBtn.disabled = false;
+    }
+  });
+
+  row.append(platformSel, userInput, fetchBtn);
+  wrap.append(row, status);
   return wrap;
 }
 
@@ -562,8 +637,9 @@ export async function openGame(gameId) {
     if (panel) panel.classList.toggle('is-active', name === 'analysis');
   });
 
-  // Clear the previous game's summary/foresight/narrative before the new data arrives.
+  // Clear the previous game's summary/graph/foresight/narrative before the new data arrives.
   renderGameSummary(null);
+  clearEvalGraph();
   const foresightHost = byId('review-foresight');
   if (foresightHost) foresightHost.replaceChildren();
   _narrativeData = null;
@@ -636,8 +712,10 @@ async function loadReviewData(gameId) {
       renderReplayEval(currentState.cursor);
     }
     renderGameSummary(_reviewData && _reviewData.summary ? _reviewData.summary : null);
+    renderEvalGraph();
   } catch (_) {
     _reviewData = null;
+    clearEvalGraph();
   }
 
   // Narrative fetch failure (network blip, or route not yet deployed) degrades
@@ -726,6 +804,155 @@ function renderReplayEval(cursor) {
     ? { evalCp: ply.eval_cp_white ?? null, mate: ply.mate_white ?? null }
     : null;
   _api.hub.renderAnalysis(a);
+}
+
+// ---------------------------------------------------------------------------
+// Eval graph — an SVG line of the stored per-ply eval across the whole game,
+// in #review-eval-graph under the review-bar summary. Point index i is the
+// SAME index space as the replay cursor (plies[i].eval_cp_white is the eval
+// of the position after i plies), so clicking point i is exactly goto(i).
+// Mate scores saturate at ±GRAPH_CAP so the line stays readable; null evals
+// (analyze-my-color skips) break the line into segments instead of
+// interpolating across unknowns. Leak plies get severity-colored dots.
+// Pointer-only shortcut by design — the move list already gives keyboard
+// access to every ply.
+// ---------------------------------------------------------------------------
+
+const GRAPH_CAP = 800; // cp; ±cap maps to the top/bottom edge
+const GRAPH_W = 480;
+const GRAPH_H = 90;
+const GRAPH_PAD = 8;
+
+const svgEl = (tag, attrs = {}) => {
+  const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  return e;
+};
+
+let _graphMarker = null;   // the current-ply <circle>, moved on review:ply
+let _graphXY = null;       // index → {x, y} for points that have an eval
+
+function graphPointCp(p) {
+  if (!p) return null;
+  if (p.mate_white != null) return p.mate_white > 0 ? GRAPH_CAP : -GRAPH_CAP;
+  if (p.eval_cp_white != null) return Math.max(-GRAPH_CAP, Math.min(GRAPH_CAP, p.eval_cp_white));
+  return null;
+}
+
+// Tooltip for point i: the move that LED to this position (plies[i-1]) plus
+// the position's eval — matches what the board shows after goto(i).
+function graphPointLabel(plies, i, cp) {
+  const evalStr = plies[i] && plies[i].mate_white != null
+    ? `#${Math.abs(plies[i].mate_white)}`
+    : (cp >= 0 ? '+' : '') + (cp / 100).toFixed(1);
+  if (i === 0) return `Start · ${evalStr}`;
+  const mover = plies[i - 1];
+  const num = Math.floor((i - 1) / 2) + 1;
+  const sep = (i - 1) % 2 === 0 ? '.' : '…';
+  return `${num}${sep} ${mover && mover.san ? mover.san : '?'} · ${evalStr}`;
+}
+
+function clearEvalGraph() {
+  const host = byId('review-eval-graph');
+  if (host) { host.hidden = true; host.replaceChildren(); }
+  _graphMarker = null;
+  _graphXY = null;
+}
+
+function renderEvalGraph() {
+  const host = byId('review-eval-graph');
+  if (!host) return;
+  const plies = (_reviewData && _reviewData.plies) || [];
+  const n = plies.length;
+
+  _graphXY = new Array(n).fill(null);
+  let numeric = 0;
+  const midY = GRAPH_H / 2;
+  const yScale = (GRAPH_H / 2 - GRAPH_PAD) / GRAPH_CAP;
+  const xStep = n > 1 ? (GRAPH_W - 2 * GRAPH_PAD) / (n - 1) : 0;
+  const cps = new Array(n).fill(null);
+  for (let i = 0; i < n; i++) {
+    const cp = graphPointCp(plies[i]);
+    cps[i] = cp;
+    if (cp == null) continue;
+    numeric++;
+    _graphXY[i] = { x: GRAPH_PAD + i * xStep, y: midY - cp * yScale };
+  }
+  if (numeric < 2) { clearEvalGraph(); return; } // nothing worth drawing
+
+  const svg = svgEl('svg', {
+    viewBox: `0 0 ${GRAPH_W} ${GRAPH_H}`,
+    role: 'img',
+    'aria-label': 'Evaluation across the game — click a point to jump to that move',
+  });
+
+  // Midline (eval 0.0).
+  svg.appendChild(svgEl('line', {
+    class: 'reg-mid', x1: GRAPH_PAD, x2: GRAPH_W - GRAPH_PAD, y1: midY, y2: midY,
+  }));
+
+  // Eval line — one polyline per contiguous run of known evals.
+  let run = [];
+  const flush = () => {
+    if (run.length >= 2) {
+      svg.appendChild(svgEl('polyline', {
+        class: 'reg-line',
+        points: run.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' '),
+      }));
+    }
+    run = [];
+  };
+  for (let i = 0; i < n; i++) {
+    if (_graphXY[i]) run.push(_graphXY[i]); else flush();
+  }
+  flush();
+
+  // Leak dots — the eval point AFTER the leak move (index === leak.ply) shows
+  // the damage. Skip leaks whose position has no stored eval.
+  const leaks = (_reviewData && _reviewData.leaks) || [];
+  for (const leak of leaks) {
+    const p = _graphXY[leak.ply];
+    if (!p) continue;
+    svg.appendChild(svgEl('circle', {
+      class: leak.severity === 'blunder' ? 'reg-dot reg-dot-blunder' : 'reg-dot reg-dot-mistake',
+      cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: 3,
+    }));
+  }
+
+  // Current-ply marker, moved by updateEvalGraphCursor on review:ply.
+  _graphMarker = svgEl('circle', { class: 'reg-marker', r: 3.5, cx: -10, cy: midY });
+  svg.appendChild(_graphMarker);
+
+  // Invisible hit targets — generous click area + native <title> tooltip.
+  for (let i = 0; i < n; i++) {
+    const p = _graphXY[i];
+    if (!p) continue;
+    const hit = svgEl('circle', { class: 'reg-hit', cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: 7 });
+    const title = svgEl('title');
+    title.textContent = graphPointLabel(plies, i, cps[i]);
+    hit.appendChild(title);
+    hit.addEventListener('click', () => {
+      if (_api && _api.actions && typeof _api.actions.goto === 'function') _api.actions.goto(i);
+    });
+    svg.appendChild(hit);
+  }
+
+  host.replaceChildren(svg);
+  host.hidden = false;
+  const st = _api && _api.actions && _api.actions.getState();
+  updateEvalGraphCursor(st ? st.cursor : 0);
+}
+
+function updateEvalGraphCursor(ply) {
+  if (!_graphMarker || !_graphXY) return;
+  const p = _graphXY[ply];
+  if (p) {
+    _graphMarker.setAttribute('cx', p.x.toFixed(1));
+    _graphMarker.setAttribute('cy', p.y.toFixed(1));
+    _graphMarker.removeAttribute('visibility');
+  } else {
+    _graphMarker.setAttribute('visibility', 'hidden'); // no eval here (skip/final)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1146,6 +1373,7 @@ export function initReview(api) {
     api.on('review:ply', (ply) => {
       renderForesight(ply);
       renderReplayEval(ply);
+      updateEvalGraphCursor(ply);
     });
   }
 

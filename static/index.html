@@ -51,6 +51,7 @@
   <link rel="stylesheet" href="/static/review.css" />
   <link rel="stylesheet" href="/static/insights.css" />
   <link rel="stylesheet" href="/static/trainer.css" />
+  <link rel="stylesheet" href="/static/cmdk.css" />
 
   <!-- Lucide icons via esm.sh — replaces HTML-entity glyphs on nav buttons -->
   <script type="module">
@@ -185,6 +186,9 @@
           <button id="review-return">Return to my game</button>
         </div>
         <div id="review-game-summary" class="review-game-summary" hidden></div>
+        <!-- Eval graph — whole-game eval line from stored per-ply evals;
+             built by review.js, click a point to jump the replay there. -->
+        <div id="review-eval-graph" class="review-eval-graph" hidden></div>
       </div>
 
       <!-- Repertoire practice bar — shown only in rep-practice mode -->
@@ -368,6 +372,15 @@
 
   <!-- Toasts container (fixed, top-right) -->
   <div id="toasts"></div>
+
+  <!-- Command palette (Cmd/Ctrl-K) — built + wired by cmdk.js -->
+  <dialog id="cmdk" class="cmdk" aria-label="Command palette">
+    <input id="cmdk-input" type="text" role="combobox" aria-expanded="true"
+           aria-controls="cmdk-list" aria-label="Search commands"
+           placeholder="Type a command… (tabs, board, traps, repertoire)"
+           autocomplete="off" spellcheck="false" />
+    <ul id="cmdk-list" role="listbox" aria-label="Commands"></ul>
+  </dialog>
 
   <!-- Promotion picker — native dialog replaces the old overlay div -->
   <dialog id="promo-dialog" class="promo-dialog">
