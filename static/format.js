@@ -6,6 +6,8 @@
 export function formatEval(a) {
   if (a == null) return '—';
   if (a.mate != null) {
+    // mate === 0 is a delivered checkmate (no distance to render) → "#".
+    if (a.mate === 0) return '#';
     const sign = a.mate > 0 ? '+' : '-';
     return `M${sign}${Math.abs(a.mate)}`;
   }

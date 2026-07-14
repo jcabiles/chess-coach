@@ -168,6 +168,40 @@ def test_move_legal_labels_quality(client):
     assert body["analysis"]["quality"] == "best"
 
 
+def test_move_checkmate_labels_quality(client):
+    """A move that delivers checkmate is labeled "checkmate" (not mis-classified
+    as a blunder by the winner) and never touches the engine — the resulting
+    position is terminal."""
+    # Scholar's mate: Qh5xf7#.
+    fen = "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4"
+    r = client.post("/api/move", json={"fen": fen, "move": "h5f7"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["legal"] is True
+    assert body["lastMoveSan"] == "Qxf7#"
+    assert body["analysis"]["quality"] == "checkmate"
+    # mate=0 renders "#"; the White-POV eval swings decisively to White (the mover).
+    assert body["analysis"]["mate"] == 0
+    assert body["analysis"]["evalWhitePov"] > 0
+    # Terminal position — no engine call.
+    assert client.fake_engine.analyze_call_count == 0
+
+
+def test_move_stalemate_labels_draw(client):
+    """A move that produces stalemate (or any non-checkmate game-over) is labeled
+    "draw", engine-free."""
+    # Legal position (Black not in check); White Kc6-b6 stalemates the lone Black
+    # king on a8 (a7 pawn covers b8, king covers a7/b7).
+    fen = "k7/P7/2K5/8/8/8/8/8 w - - 0 1"
+    r = client.post("/api/move", json={"fen": fen, "move": "c6b6"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["legal"] is True
+    assert body["analysis"]["quality"] == "draw"
+    assert body["analysis"]["evalCp"] == 0
+    assert client.fake_engine.analyze_call_count == 0
+
+
 def test_move_includes_retro_and_second(client):
     """/api/move surfaces the retrospective best + a 2nd-best line for both spots,
     without changing the top-level (current-position) best move."""

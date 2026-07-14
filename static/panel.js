@@ -21,6 +21,9 @@ let _api = null;
 function evalBarFill(a) {
   if (a == null) return 50;
   if (a.mate != null) {
+    // mate === 0 (delivered checkmate) has no sign — read the winner from the
+    // White-POV eval instead so the bar swings to the side that mated.
+    if (a.mate === 0) return a.evalWhitePov > 0 ? 95 : 5;
     return a.mate > 0 ? 95 : 5;
   }
   if (a.evalCp != null) {
@@ -157,6 +160,16 @@ const QUALITY_ICONS = {
   book: () => svgIcon(
     // Book
     `<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>`,
+    'var(--q-book)'
+  ),
+  checkmate: () => svgIcon(
+    // Flag — the game is won
+    `<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>`,
+    'var(--q-best)'
+  ),
+  draw: () => svgIcon(
+    // Equals — a drawn result
+    `<line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/>`,
     'var(--q-book)'
   ),
 };

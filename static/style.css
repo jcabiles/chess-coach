@@ -683,6 +683,8 @@ body[data-mode="blunder-practice"] .tab-panel {
 .q-mistake    { color: var(--q-mistake); }
 .q-blunder    { color: var(--q-blunder); }
 .q-book       { color: var(--q-book); }
+.q-checkmate  { color: var(--q-best); }  /* game won — reuse the "best" green */
+.q-draw       { color: var(--q-book); }  /* drawn result — neutral azure */
 
 /* ============================================================
    Best move + PV

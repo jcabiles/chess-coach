@@ -44,7 +44,7 @@ from app import (
     trainer,
     traps,
 )
-from app.analysis import classify, cp_loss, pov_score_to_white_cp
+from app.analysis import MATE_CP, classify, cp_loss, pov_score_to_white_cp
 from app.engine import DEFAULT_DEPTH, AnalysisResult, EngineUnavailable, StockfishEngine
 from app.models import (
     Analysis,
@@ -409,6 +409,42 @@ async def make_move(req: MoveRequest, engine: StockfishEngine = Depends(get_engi
     fen_before = board.fen()
     board.push(move)
     fen_after = board.fen()
+
+    # Game-ending move: the resulting position is terminal (no legal reply), so
+    # the engine's eval of it is degenerate — running it through classify() would
+    # mis-label a mating move as a "blunder" by the winner. Detect the outcome
+    # here and emit a terminal-state quality directly, skipping the engine (there
+    # is nothing left to analyze). Placed before the book / analyze opt-outs so an
+    # opponent's mating move is labeled even when the client skipped analysis.
+    if board.is_game_over():
+        if board.is_checkmate():
+            # mate=0 renders as "#"; evalWhitePov carries the winner's side (the
+            # mover) so the eval bar swings decisively to them.
+            analysis = Analysis(
+                evalCp=None,
+                mate=0,
+                evalWhitePov=MATE_CP if mover_is_white else -MATE_CP,
+                bestMoveSan=None,
+                bestMoveUci=None,
+                pvSan=[],
+                quality="checkmate",
+            )
+        else:
+            analysis = Analysis(
+                evalCp=0,
+                mate=None,
+                evalWhitePov=0,
+                bestMoveSan=None,
+                bestMoveUci=None,
+                pvSan=[],
+                quality="draw",
+            )
+        return MoveResponse(
+            legal=True,
+            fen=fen_after,
+            lastMoveSan=last_move_san,
+            analysis=analysis,
+        )
 
     # Opening-book fast-path: when the client opts in (play mode) and the move stays
     # in book, return instantly WITHOUT touching the engine. Legality is already
