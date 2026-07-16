@@ -163,7 +163,7 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
 > only — hard dependency gating (B1 first) fully determines executable order
 > in this chapter; **user owns final order + promotions**.
 
-- [ ] **B1. Research spike: what makes chess bots human-like** — problem:
+- [x] **B1. Research spike: what makes chess bots human-like** — problem:
       P2/P1 realism is a research question, not a build question (user
       requirement: blunders must be *causal* — e.g. a low-ELO bot misses your
       threat because it's busy orchestrating its own attack — never
