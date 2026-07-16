@@ -16,38 +16,38 @@ Regenerable: `STOCKFISH_PATH=... .venv/bin/python docs/ai-dlc/research/probes/pr
 
 | Config | avg cpLoss | median | % match-best | blunders (>200) | verdict |
 |---|---|---|---|---|---|
-| Skill Level 3 | 24 | 6 | 40% | 0/20 | **HUMAN-LIKE** |
-| Skill Level 10 | 7 | 1 | 50% | 0/20 | **HUMAN-LIKE** |
-| LimitStrength Elo 1350 | 62 | 18 | 20% | 2/20 | **HUMAN-LIKE** |
-| LimitStrength Elo 1700 | 41 | 11 | 35% | 0/20 | **HUMAN-LIKE** |
-| Nodes cap 500 | 3 | 0 | 75% | 0/20 | **NOT MEANINGFULLY WEAKENED** |
+| Skill Level 3 | 45 | 7 | 35% | 1/20 | **HUMAN-LIKE** |
+| Skill Level 10 | 22 | 4 | 50% | 0/20 | **HUMAN-LIKE** |
+| LimitStrength Elo 1350 | 51 | 14 | 35% | 2/20 | **HUMAN-LIKE** |
+| LimitStrength Elo 1700 | 42 | 2 | 55% | 2/20 | **HUMAN-LIKE** |
+| Nodes cap 500 | 16 | 2 | 55% | 0/20 | **NOT MEANINGFULLY WEAKENED** |
 
 ## Per-config verdicts
 
 ### Skill Level 3
 
-- **Human-vs-random:** HUMAN-LIKE: avg cpLoss 24, 0/20 blunders (0%), 40% match-best. errors are small and infrequent; picks the top move often, mistakes look like understandable inaccuracies.
-- **Threat-facing:** 5/6 threats handled, 1 missed. #0 opening/threat: discovered: handled | #1 middlegame/threat: hanging: handled | #2 endgame/threat: hanging: handled | #3 opening/threat: hanging: MISSED (cpLoss 128) | #4 middlegame/threat: hanging: handled | #16 opening/Ruy: Bb5 pins Nc6: handled
+- **Human-vs-random:** HUMAN-LIKE: avg cpLoss 45, 1/20 blunders (5%), 35% match-best. errors are small and infrequent; picks the top move often, mistakes look like understandable inaccuracies.
+- **Threat-facing:** 3/6 threats handled, 3 missed. #0 opening/threat: discovered: handled | #1 middlegame/threat: hanging: MISSED (cpLoss 202) | #2 endgame/threat: hanging: MISSED (cpLoss 198) | #3 opening/threat: hanging: MISSED (cpLoss 129) | #4 middlegame/threat: hanging: handled | #16 opening/Ruy: Bb5 pins Nc6: handled
 
 ### Skill Level 10
 
-- **Human-vs-random:** HUMAN-LIKE: avg cpLoss 7, 0/20 blunders (0%), 50% match-best. errors are small and infrequent; picks the top move often, mistakes look like understandable inaccuracies.
-- **Threat-facing:** 6/6 threats handled, 0 missed. #0 opening/threat: discovered: handled | #1 middlegame/threat: hanging: handled | #2 endgame/threat: hanging: handled | #3 opening/threat: hanging: handled | #4 middlegame/threat: hanging: handled | #16 opening/Ruy: Bb5 pins Nc6: handled
+- **Human-vs-random:** HUMAN-LIKE: avg cpLoss 22, 0/20 blunders (0%), 50% match-best. errors are small and infrequent; picks the top move often, mistakes look like understandable inaccuracies.
+- **Threat-facing:** 5/6 threats handled, 1 missed. #0 opening/threat: discovered: MISSED (cpLoss 167) | #1 middlegame/threat: hanging: handled | #2 endgame/threat: hanging: handled | #3 opening/threat: hanging: handled | #4 middlegame/threat: hanging: handled | #16 opening/Ruy: Bb5 pins Nc6: handled
 
 ### LimitStrength Elo 1350
 
-- **Human-vs-random:** HUMAN-LIKE: avg cpLoss 62, 2/20 blunders (10%), 20% match-best. errors are small and infrequent; picks the top move often, mistakes look like understandable inaccuracies.
-- **Threat-facing:** 5/6 threats handled, 1 missed. #0 opening/threat: discovered: handled | #1 middlegame/threat: hanging: MISSED (cpLoss 237) | #2 endgame/threat: hanging: handled | #3 opening/threat: hanging: handled | #4 middlegame/threat: hanging: handled | #16 opening/Ruy: Bb5 pins Nc6: handled
+- **Human-vs-random:** HUMAN-LIKE: avg cpLoss 51, 2/20 blunders (10%), 35% match-best. errors are small and infrequent; picks the top move often, mistakes look like understandable inaccuracies.
+- **Threat-facing:** 2/6 threats handled, 4 missed. #0 opening/threat: discovered: MISSED (cpLoss 104) | #1 middlegame/threat: hanging: MISSED (cpLoss 231) | #2 endgame/threat: hanging: MISSED (cpLoss 240) | #3 opening/threat: hanging: MISSED (cpLoss 108) | #4 middlegame/threat: hanging: handled | #16 opening/Ruy: Bb5 pins Nc6: handled
 
 ### LimitStrength Elo 1700
 
-- **Human-vs-random:** HUMAN-LIKE: avg cpLoss 41, 0/20 blunders (0%), 35% match-best. errors are small and infrequent; picks the top move often, mistakes look like understandable inaccuracies.
-- **Threat-facing:** 4/6 threats handled, 2 missed. #0 opening/threat: discovered: MISSED (cpLoss 184) | #1 middlegame/threat: hanging: handled | #2 endgame/threat: hanging: handled | #3 opening/threat: hanging: MISSED (cpLoss 115) | #4 middlegame/threat: hanging: handled | #16 opening/Ruy: Bb5 pins Nc6: handled
+- **Human-vs-random:** HUMAN-LIKE: avg cpLoss 42, 2/20 blunders (10%), 55% match-best. errors are small and infrequent; picks the top move often, mistakes look like understandable inaccuracies.
+- **Threat-facing:** 5/6 threats handled, 1 missed. #0 opening/threat: discovered: MISSED (cpLoss 218) | #1 middlegame/threat: hanging: handled | #2 endgame/threat: hanging: handled | #3 opening/threat: hanging: handled | #4 middlegame/threat: hanging: handled | #16 opening/Ruy: Bb5 pins Nc6: handled
 
 ### Nodes cap 500
 
-- **Human-vs-random:** NOT MEANINGFULLY WEAKENED: avg cpLoss 3, 0/20 blunders (0%), 75% match-best. plays at near-full strength — this config barely dents modern Stockfish, so it says little about human-likeness.
-- **Threat-facing:** 6/6 threats handled, 0 missed. #0 opening/threat: discovered: handled | #1 middlegame/threat: hanging: handled | #2 endgame/threat: hanging: handled | #3 opening/threat: hanging: handled | #4 middlegame/threat: hanging: handled | #16 opening/Ruy: Bb5 pins Nc6: handled
+- **Human-vs-random:** NOT MEANINGFULLY WEAKENED: avg cpLoss 16, 0/20 blunders (0%), 55% match-best. plays at near-full strength — this config barely dents modern Stockfish, so it says little about human-likeness.
+- **Threat-facing:** 4/6 threats handled, 2 missed. #0 opening/threat: discovered: MISSED (cpLoss 106) | #1 middlegame/threat: hanging: MISSED (cpLoss 141) | #2 endgame/threat: hanging: handled | #3 opening/threat: hanging: handled | #4 middlegame/threat: hanging: handled | #16 opening/Ruy: Bb5 pins Nc6: handled
 
 ## Positions
 
@@ -78,26 +78,26 @@ Regenerable: `STOCKFISH_PATH=... .venv/bin/python docs/ai-dlc/research/probes/pr
 
 | # | phase | threat | Skill Level 3 | Skill Level 10 | LimitStrength Elo 1350 | LimitStrength Elo 1700 | Nodes cap 500 |
 |---|---|---|---|---|---|---|---|
-| 0 | opening | Y | Nb4= (0) | Nb4= (0) | Nb4= (14) | O-O-O (184) | Nb4= (0) |
-| 1 | middlegame | Y | Rxf8+= (0) | Qc3 (39) | Rh1 (237) | Qc3 (7) | Rxf8+= (2) |
-| 2 | endgame | Y | Rf4+= (0) | Rf4+= (0) | Rf4+= (5) | Rf4+= (0) | Rf4+= (0) |
-| 3 | opening | Y | Ra7 (128) | hxg4= (11) | Nxe3 (53) | Be7 (115) | hxg4= (1) |
-| 4 | middlegame | Y | Na6 (49) | Nc6= (0) | Ra6 (93) | Nc6= (12) | Nc6= (0) |
-| 5 | opening |  | e5= (0) | e5 (0) | Nc6 (8) | c6 (5) | e5= (0) |
-| 6 | middlegame |  | Nd7 (57) | Ng6= (0) | Nd7 (32) | Ng6= (0) | Ng6= (0) |
-| 7 | endgame |  | Re7 (8) | g5 (13) | Qd6 (2) | Qd7 (14) | Re6 (18) |
-| 8 | opening |  | Qe7 (46) | Ne4= (0) | Ne4= (2) | h4 (27) | Ne4= (0) |
-| 9 | opening |  | O-O (17) | Nd5 (11) | O-O (11) | Nd2= (10) | Nd2 (1) |
-| 10 | middlegame |  | bxc5= (4) | bxc5= (2) | h4 (411) | f5 (197) | bxc5= (1) |
-| 11 | opening |  | Nf3 (0) | d4 (3) | c3 (29) | e4= (0) | e4= (0) |
-| 12 | opening |  | d6 (19) | Nf6 (0) | Bc5 (2) | Bc5 (0) | Nf6= (0) |
-| 13 | opening |  | a5 (9) | a5 (17) | d6 (15) | h6= (1) | d6 (8) |
-| 14 | opening |  | O-O= (0) | Nc3 (32) | Nc3 (31) | Nc3 (38) | O-O= (0) |
-| 15 | middlegame |  | Nd5= (5) | Nd5= (0) | Bh4 (95) | h3 (48) | Nd5= (0) |
-| 16 | opening | Y | Nge7 (26) | a6 (9) | Bc5 (22) | Nge7 (28) | a6 (20) |
+| 0 | opening | Y | Nb4= (0) | O-O-O (167) | e5 (104) | O-O-O (218) | e5 (106) |
+| 1 | middlegame | Y | Rh1 (202) | Rxf8+= (1) | Rh1 (231) | Rxf8+= (0) | Re1 (141) |
+| 2 | endgame | Y | Re3 (198) | Rf4+= (0) | Rd3 (240) | Rf4+= (0) | Rf4+= (3) |
+| 3 | opening | Y | Rc8 (129) | hxg4= (0) | Be7 (108) | hxg4= (23) | hxg4= (0) |
+| 4 | middlegame | Y | Nc6= (3) | Na6 (50) | Nc6= (0) | Nc6= (27) | Nc6= (15) |
+| 5 | opening |  | c6 (1) | e6= (7) | g6 (32) | c6 (7) | e5 (0) |
+| 6 | middlegame |  | Nd7 (23) | Nd7 (23) | Ng6= (19) | Ng6= (0) | Ng6= (3) |
+| 7 | endgame |  | g6 (6) | Re6 (30) | Qb8 (16) | Qf6 (0) | Re6 (0) |
+| 8 | opening |  | Ne4= (2) | Qe7 (71) | a6 (93) | e5 (106) | Ne4= (1) |
+| 9 | opening |  | a3 (14) | Nd2 (0) | O-O (12) | h3= (0) | O-O (9) |
+| 10 | middlegame |  | bxc5= (6) | bxc5= (8) | bxc5= (1) | Nxe4 (376) | bxc5= (0) |
+| 11 | opening |  | e4= (4) | d4 (0) | d4= (6) | d4= (0) | e4 (6) |
+| 12 | opening |  | a6 (40) | Nf6= (8) | Be7 (16) | Nf6= (2) | Bc5 (2) |
+| 13 | opening |  | O-O (6) | a6= (0) | d6 (4) | h6 (0) | a6= (2) |
+| 14 | opening |  | d3 (8) | d3 (13) | d3 (11) | d4 (40) | Nc3 (24) |
+| 15 | middlegame |  | Kh1 (111) | h3 (69) | Kh1 (118) | Nd5= (7) | Nd5= (6) |
+| 16 | opening | Y | Nge7 (25) | Nf6= (0) | Nf6= (0) | Nge7 (27) | Nf6= (3) |
 | 17 | endgame |  | Ra8#= (0) | Ra8#= (0) | Ra8#= (0) | Ra8#= (0) | Ra8#= (0) |
-| 18 | endgame |  | Kd2 (0) | Kd2 (5) | Kf3 (0) | Kf2 (0) | Kd2 (0) |
-| 19 | middlegame |  | Kd2 (111) | O-O-O= (0) | Kf1 (174) | Kd2 (133) | O-O-O= (7) |
+| 18 | endgame |  | Kd3= (0) | Kd2 (0) | Kf2 (1) | Kd2 (0) | Kd3 (0) |
+| 19 | middlegame |  | Kd1 (117) | O-O-O= (0) | O-O-O= (0) | O-O-O= (2) | O-O-O= (0) |
 
 _Cell = chosen move (cpLoss). `=` marks the move matching full-strength best._
 
@@ -134,5 +134,5 @@ _Note: exact Maia weight URLs/paths should be confirmed at install time; the mai
 - Skill Level / node-cap play is stochastic; numbers may shift a few cp between runs even with a seed (seed only fixes db sampling).
 - The HUMAN-vs-RANDOM verdict is a heuristic over avg cpLoss + blunder rate + match-rate, not a human rater. Treat as directional evidence.
 - 'Threat handled/missed' infers from cpLoss on threat-facing positions; it cannot literally read the engine's intent.
-- **Nodes cap 500 barely weakens Stockfish 18**: modern SF plays near-perfectly on a tiny node budget, so a pure node cap is NOT a usable weakener for human-like bots. Skill Level / UCI_Elo are the effective knobs. (Its avg cpLoss/match numbers flicker run-to-run but stay very low — treat as 'essentially full strength'.)
+- **Node caps are a coarse, unanchored knob**: with a cold TT per config, nodes=500 does weaken SF18 measurably, but it remains the strongest of the weakened configs and carries no ELO semantics (strength varies by hardware/version). Skill Level / UCI_Elo are the primary usable knobs. NOTE: an earlier revision of this probe ran all configs sequentially on ONE engine process; the node-cap config ran last on a warm transposition table over these same positions and looked essentially full-strength — a confound fixed by fresh-process-per-config (flagged in review).
 - Key epic finding: across the *effective* weakeners (Skill 3, Elo 1350/1700), errors on threat-facing positions are dominated by **missing a real threat while playing an otherwise purposeful move** (the chosen move has a plan; it just overlooks the tactic) rather than random piece drops — i.e. reads HUMAN, not RANDOM. Lower settings (Skill 3) miss threats more often, as a weaker human would.

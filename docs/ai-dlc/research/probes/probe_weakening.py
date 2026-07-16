@@ -610,11 +610,15 @@ def render_results(
       "rate + match-rate, not a human rater. Treat as directional evidence.")
     L("- 'Threat handled/missed' infers from cpLoss on threat-facing "
       "positions; it cannot literally read the engine's intent.")
-    L("- **Nodes cap 500 barely weakens Stockfish 18**: modern SF plays "
-      "near-perfectly on a tiny node budget, so a pure node cap is NOT a "
-      "usable weakener for human-like bots. Skill Level / UCI_Elo are the "
-      "effective knobs. (Its avg cpLoss/match numbers flicker run-to-run "
-      "but stay very low — treat as 'essentially full strength'.)")
+    L("- **Node caps are a coarse, unanchored knob**: with a cold TT per "
+      "config, nodes=500 does weaken SF18 measurably, but it remains the "
+      "strongest of the weakened configs and carries no ELO semantics "
+      "(strength varies by hardware/version). Skill Level / UCI_Elo are "
+      "the primary usable knobs. NOTE: an earlier revision of this probe "
+      "ran all configs sequentially on ONE engine process; the node-cap "
+      "config ran last on a warm transposition table over these same "
+      "positions and looked essentially full-strength — a confound fixed "
+      "by fresh-process-per-config (flagged in review).")
     L("- Key epic finding: across the *effective* weakeners (Skill 3, Elo "
       "1350/1700), errors on threat-facing positions are dominated by "
       "**missing a real threat while playing an otherwise purposeful move** "
@@ -638,30 +642,30 @@ def main() -> None:
     configs = make_configs()
 
     ref_engine = chess.engine.SimpleEngine.popen_uci(sf)
-    weak_engine = chess.engine.SimpleEngine.popen_uci(sf)
     sf_version = ref_engine.id.get("name", "Stockfish")
     try:
         aggs: list[ConfigAgg] = []
         for cfg in configs:
             print(f"\n=== {cfg.name} ===")
             agg = ConfigAgg(name=cfg.name)
-            for p in positions:
-                # reset weak engine options between configs cleanly
-                res = evaluate_position(ref_engine, weak_engine, cfg, p.fen)
-                agg.results.append((p, res))
-                print(f"  #{p.idx:2d} {p.phase:10s} "
-                      f"{'THREAT' if p.threat else '      '} "
-                      f"{res.move:7s} cpLoss={res.cp_loss} "
-                      f"{'=best' if res.match_best else ''}")
-            # restore defaults so next config starts clean
-            weak_engine.configure({
-                "Skill Level": 20,
-                "UCI_LimitStrength": False,
-            })
+            # Fresh engine process per config: cold transposition table, so
+            # no config inherits search results another config left behind
+            # over these same positions (earlier runs confounded the
+            # node-cap config, which ran last on a warm TT).
+            weak_engine = chess.engine.SimpleEngine.popen_uci(sf)
+            try:
+                for p in positions:
+                    res = evaluate_position(ref_engine, weak_engine, cfg, p.fen)
+                    agg.results.append((p, res))
+                    print(f"  #{p.idx:2d} {p.phase:10s} "
+                          f"{'THREAT' if p.threat else '      '} "
+                          f"{res.move:7s} cpLoss={res.cp_loss} "
+                          f"{'=best' if res.match_best else ''}")
+            finally:
+                weak_engine.quit()
             aggs.append(agg)
     finally:
         ref_engine.quit()
-        weak_engine.quit()
 
     lc0_info = detect_lc0_maia()
     report = render_results(positions, aggs, lc0_info, sf, sf_version)
