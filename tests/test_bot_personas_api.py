@@ -82,9 +82,19 @@ def test_status_lists_four_personas_and_default(client):
     assert ids == ["casey", "morgan", "alex", "vera"]
     # personaLabel stays back-compat = the default persona's name.
     assert body["personaLabel"] == "Casey"
-    # Each persona dict carries the full shape.
+    # Each persona dict carries the full shape (B5 added blunderRate +
+    # threatDistance — additive causal-blunder dials).
     for p in body["personas"]:
-        assert set(p) == {"id", "name", "elo", "style", "description", "temperature"}
+        assert set(p) == {
+            "id",
+            "name",
+            "elo",
+            "style",
+            "description",
+            "temperature",
+            "blunderRate",
+            "threatDistance",
+        }
     casey = next(p for p in body["personas"] if p["id"] == "casey")
     assert casey["elo"] == 1350
 
@@ -184,7 +194,14 @@ def test_black_bot_samples_best_for_black_move(monkeypatch):
         p = orig_get(pid)
         if p is not None and p.id == "casey":
             return personas_mod.Persona(
-                p.id, p.name, p.elo, p.style, p.description, 0.01
+                p.id,
+                p.name,
+                p.elo,
+                p.style,
+                p.description,
+                0.01,
+                blunderRate=p.blunderRate,
+                threatDistance=p.threatDistance,
             )
         return p
 
