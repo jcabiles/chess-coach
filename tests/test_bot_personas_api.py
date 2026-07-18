@@ -81,7 +81,7 @@ def test_status_lists_six_personas_and_default(client):
     ids = [p["id"] for p in body["personas"]]
     assert ids == ["casey", "diego", "robin", "morgan", "alex", "vera"]
     # personaLabel stays back-compat = the default persona's name.
-    assert body["personaLabel"] == "Casey"
+    assert body["personaLabel"] == "Ming Ling"
     # Each persona dict carries the full shape (B5 added blunderRate +
     # threatDistance + mistakeRate — additive causal-blunder dials).
     for p in body["personas"]:
@@ -294,7 +294,7 @@ def test_save_with_persona_resolves_from_catalog(save_client):
         "personaElo": 1800,  # catalog Elo, NOT the bogus 9999
     }
     # PGN name is the catalog persona name, NOT the client-sent label.
-    assert g["black"] == "Alex"
+    assert g["black"] == "Melvin"
 
 
 def test_save_without_persona_writes_exact_b3_shape(save_client):
