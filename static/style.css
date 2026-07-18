@@ -280,6 +280,11 @@ main {
   flex: 0 0 auto;
   overflow-y: auto;
   min-height: 0;
+  /* Board sizes to fit the viewport height so it's never clipped/scrolled on
+     short screens. Capped at 480px; shrinks when height is tight. The 240px
+     reserves header + main padding + the controls/FEN/bot rows below the board.
+     Both #board and #eval-bar read this so board-wrap shrinks as one. */
+  --board-size: min(480px, calc(100dvh - 240px));
 }
 
 /* Board wrap: eval-bar | board side by side */
@@ -298,13 +303,13 @@ main {
   background: var(--surface-raised);
   border: 1px solid var(--border-subtle);
   /* min-height mirrors the board */
-  min-height: 480px;
+  min-height: var(--board-size);
 }
 
 /* Board itself — refined framed container */
 #board {
-  width: 480px;
-  height: 480px;
+  width: var(--board-size);
+  height: var(--board-size);
   border-radius: var(--radius-sm);
   overflow: hidden;
   box-shadow: var(--shadow-md), 0 0 0 2px var(--border);
