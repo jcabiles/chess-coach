@@ -627,6 +627,206 @@ body.setup-mode #fen-error { display: none; }
   display: block;
 }
 
+/* ============================================================
+   Bot rail (T5) — right-hand roster of opponents. Fills its
+   ~300px grid track (5th track under main.bot-rail-open), owns
+   its own scroll, surface-panel background + left hairline.
+   Single .bot-rail block so T6 (mobile overlay sheet) can
+   override cleanly. Desktop only in this ticket.
+   ============================================================ */
+#bot-rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;               /* allow the inner list to scroll, not the grid */
+  overflow: hidden;
+  background: var(--surface-panel);
+  border-left: 1px solid var(--border-subtle);
+}
+
+/* [hidden] override lives at the grid section (#bot-rail[hidden]{display:none})
+   so the flex display doesn't no-op the attribute. */
+
+.bot-rail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-2);
+  flex-shrink: 0;
+}
+
+.bot-rail-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+
+.bot-rail-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-out),
+              color var(--motion-fast) var(--ease-out);
+}
+
+.bot-rail-close:hover {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.bot-rail-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.bot-rail-close i[data-lucide] {
+  width: 16px;
+  height: 16px;
+}
+
+.bot-rail-lock-hint {
+  padding: 0 var(--space-4) var(--space-2);
+  font-size: 0.78rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* Scrolling card list — the one scroll region in the rail. */
+.bot-rail-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-4);
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+/* ---- Persona card ---- */
+.bot-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease-out),
+              background var(--motion-fast) var(--ease-out);
+}
+
+.bot-card:hover {
+  border-color: var(--border);
+  background: var(--surface-overlay);
+}
+
+.bot-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Selected persona — accent frame + tinted fill; the rail's one focal state. */
+.bot-card.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* Mid-game lock — muted + not-allowed; a live game freezes selection. */
+.bot-card.is-locked {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.bot-card.is-locked:hover {
+  border-color: var(--border-subtle);
+  background: var(--surface-raised);
+}
+
+.bot-card.is-locked.is-selected:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* Avatar — 56px round portrait, clickable (opens lightbox). */
+.bot-card-avatar {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border: none;
+  padding: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--accent-dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.bot-card-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.bot-card-avatar:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Initials fallback (no photo) — accent-tinted circle, tokens only. */
+.bot-card-avatar.is-initials {
+  cursor: default;
+  background: var(--accent-dim);
+}
+
+.bot-card-initials {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+.bot-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;               /* let long blurbs wrap instead of overflow */
+}
+
+.bot-card-name {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.bot-card-rating {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.bot-card-blurb {
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bot-card,
+  .bot-rail-close { transition: none; }
+}
+
 /* ---- Tab rail — vertical icon+label nav in the first grid column.
    Lives as a direct child of <main> (moved out of the aside); tab wiring
    in panel.js is ID-based and unaffected. ---- */
@@ -1859,6 +2059,70 @@ body.rep-mode #fen-error { display: none; }
 }
 
 .promo-choices button { font-size: 1rem; }
+
+/* ---- Avatar lightbox (T5) — native <dialog> top-layer (no z-index needed).
+   Full persona portrait + name/rating caption; ×/backdrop/Esc close. ---- */
+#avatar-lightbox {
+  position: relative;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  max-width: min(80vw, 80vh);
+}
+
+#avatar-lightbox::backdrop {
+  background: var(--scrim);
+  backdrop-filter: blur(2px);
+}
+
+.avatar-lightbox-img {
+  display: block;
+  width: 100%;
+  max-width: min(80vw, 80vh);
+  max-height: 80vh;
+  border-radius: var(--radius-md);
+  object-fit: contain;
+}
+
+.avatar-lightbox-caption {
+  margin-top: var(--space-3);
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.avatar-lightbox-close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.avatar-lightbox-close:hover { background: var(--surface-panel); }
+
+.avatar-lightbox-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.avatar-lightbox-close i[data-lucide] { width: 18px; height: 18px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-lightbox-close { transition: none; }
+}
 
 /* ============================================================
    Toasts container — styled in feedback.css (single owner).

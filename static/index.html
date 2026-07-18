@@ -531,6 +531,18 @@
     <ul id="cmdk-list" role="listbox" aria-label="Commands"></ul>
   </dialog>
 
+  <!-- Avatar lightbox — native <dialog> (same top-layer pattern as
+       #promo-dialog); opened by botplay.js when a persona card's portrait is
+       clicked. Full photo + name/rating caption; closes via ×, backdrop click,
+       or Esc. Built empty; botplay.js fills the img/caption per persona. -->
+  <dialog id="avatar-lightbox" class="avatar-lightbox" aria-label="Bot portrait">
+    <button id="avatar-lightbox-close" class="avatar-lightbox-close" type="button" aria-label="Close portrait">
+      <i data-lucide="x" aria-hidden="true"></i>
+    </button>
+    <img id="avatar-lightbox-img" class="avatar-lightbox-img" src="" alt="">
+    <div id="avatar-lightbox-caption" class="avatar-lightbox-caption"></div>
+  </dialog>
+
   <!-- Promotion picker — native dialog replaces the old overlay div -->
   <dialog id="promo-dialog" class="promo-dialog">
     <div class="promo-title">Promote to:</div>
