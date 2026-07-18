@@ -120,8 +120,12 @@ html[data-theme="light"] {
 
   /* ---- Accent — deep green, ≥4.5:1 on base/panel ---- */
   --accent:           oklch(52% 0.14 152);  /* #16843f */
-  --accent-dim:       oklch(93.5% 0.045 152); /* #d7f2e0 — tinted bg under --accent text */
-  --accent-dim-hover: oklch(90.5% 0.055 152); /* #c2ead1 — one step deeper on hover */
+  /* Lightened so --accent text clears 4.5:1 on the tinted fill (was 93.5% →
+     4.3:1, 0.2 short of AA — failed on every accent-dim chip: seg/best-move/
+     review-btn-primary + T5 chip/pill/initials). 96% → 4.61:1; hover stays a
+     touch darker at 95.3% → 4.54:1, still AA. Dark theme untouched (8.5:1). */
+  --accent-dim:       oklch(96% 0.035 152);   /* #e1f9e6 — tinted bg under --accent text */
+  --accent-dim-hover: oklch(95.3% 0.04 152);  /* #ddf8e3 — one step deeper on hover */
   --accent-on:        oklch(98.5% 0.002 286); /* #fafafc — on-accent text */
 
   /* ---- Semantic error — 6.4:1 on base ---- */
