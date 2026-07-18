@@ -73,6 +73,79 @@ def test_default_persona_shape():
 
 
 # --------------------------------------------------------------------------- #
+# B5 causal-blunder dials — blunderRate / threatDistance
+# --------------------------------------------------------------------------- #
+
+
+def test_default_ladder_blunder_dials_present_and_monotone():
+    ladder = [personas.get(pid) for pid in ("casey", "morgan", "alex", "vera")]
+    for p in ladder:
+        assert 0.0 <= p.blunderRate <= 1.0
+        assert 0.0 <= p.threatDistance <= 1.0
+    blunder_rates = [p.blunderRate for p in ladder]
+    threat_distances = [p.threatDistance for p in ladder]
+    # Higher elo -> lower blunderRate, higher threatDistance (Casey -> Vera).
+    assert blunder_rates == sorted(blunder_rates, reverse=True)
+    assert threat_distances == sorted(threat_distances)
+    # Strictly monotone (no ties across the ladder).
+    assert len(set(blunder_rates)) == len(blunder_rates)
+    assert len(set(threat_distances)) == len(threat_distances)
+
+
+def test_blunder_dials_derived_from_elo_when_absent(tmp_path):
+    # Old-style JSON: no blunderRate/threatDistance fields at all.
+    ladder = [
+        {"id": "casey", "name": "Casey", "elo": 1350, "style": "solid",
+         "description": "d", "temperature": 80},
+        {"id": "vera", "name": "Vera", "elo": 2000, "style": "positional",
+         "description": "d", "temperature": 100},
+    ]
+    path = _write(tmp_path, {"personas": ladder})
+    personas.init(path)
+    casey = personas.get("casey")
+    vera = personas.get("vera")
+    assert casey.blunderRate == pytest.approx(0.85)
+    assert casey.threatDistance == pytest.approx(0.15)
+    assert vera.blunderRate == pytest.approx(0.20)
+    assert vera.threatDistance == pytest.approx(2000 / 3000)
+    # Elo-derived defaults keep the ladder monotone even from an old file.
+    assert casey.blunderRate > vera.blunderRate
+    assert casey.threatDistance < vera.threatDistance
+
+
+def test_blunder_dials_read_explicitly_when_present(tmp_path):
+    ladder = [
+        {"id": "casey", "name": "Casey", "elo": 1350, "style": "solid",
+         "description": "d", "temperature": 80, "blunderRate": 0.5, "threatDistance": 0.4},
+    ]
+    path = _write(tmp_path, {"personas": ladder})
+    personas.init(path)
+    casey = personas.get("casey")
+    assert casey.blunderRate == 0.5
+    assert casey.threatDistance == 0.4
+
+
+def test_blunder_rate_out_of_range_keeps_defaults(tmp_path):
+    ladder = [
+        dict(VALID_LADDER[0], blunderRate=1.5),
+        dict(VALID_LADDER[1]),
+    ]
+    path = _write(tmp_path, {"personas": ladder})
+    personas.init(path)
+    assert len(personas.all()) == 4  # defaults kept
+
+
+def test_threat_distance_out_of_range_keeps_defaults(tmp_path):
+    ladder = [
+        dict(VALID_LADDER[0], threatDistance=-0.1),
+        dict(VALID_LADDER[1]),
+    ]
+    path = _write(tmp_path, {"personas": ladder})
+    personas.init(path)
+    assert len(personas.all()) == 4  # defaults kept
+
+
+# --------------------------------------------------------------------------- #
 # init() overrides + validation
 # --------------------------------------------------------------------------- #
 

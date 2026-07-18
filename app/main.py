@@ -33,7 +33,9 @@ from pydantic import BaseModel, Field  # bot routes (B2) define request/response
 
 from app import (
     accuracy,
+    analysis,
     book,
+    bot_blunder,
     coaching,
     fetch,
     insights,
@@ -587,6 +589,10 @@ BOT_PERSONA_LABEL = personas.get(personas.default_id()).name
 OPENING_PLIES = 8
 #: Candidate count requested for opening-phase persona sampling.
 SAMPLE_K = 5
+#: Candidate count requested when the causal-blunder gate fires (B5) — a wider
+#: set so ``bot_blunder.pick_survivor`` has plan moves to fall back to after the
+#: threat-neutralizing candidates are dropped.
+CAND_K = 5
 
 
 class BotMoveRequest(BaseModel):
@@ -602,6 +608,11 @@ class BotMoveRequest(BaseModel):
     )
     ply: int = Field(default=0, description="Current half-move index (drives opening sampling).")
     seed: int | None = Field(default=None, description="Per-game seed for deterministic sampling.")
+    recentMoves: list[str] = Field(
+        default_factory=list,
+        description="The bot's recent own moves in UCI (drives the B5 plan "
+        "attention set); default empty ⇒ bare {fen} stays B3-valid.",
+    )
 
 
 class BotMoveResponse(BaseModel):
@@ -689,9 +700,48 @@ async def bot_move(req: BotMoveRequest, bot: BotEngine = Depends(get_bot_engine)
                 raise HTTPException(
                     status_code=400, detail=f"Unknown personaId {req.personaId!r}."
                 )
-            if req.ply < OPENING_PLIES:
+
+            # B5 causal-blunder gate, computed FIRST (pure, cheap) so the wider
+            # candidate budget + the k increase are confined to induced-blunder
+            # moves — a quiet position keeps B4's k=1 + best. The threat belongs
+            # to the OPPONENT, who moves after the bot; a null-move board makes
+            # "the side to move" the opponent so opponent_threat sees THEIR
+            # threats, not the bot's. A bot in check must respond (no plausible
+            # "miss") → skip the gate.
+            plan = bot_blunder.plan_attention_set(req.recentMoves, board)
+            if board.is_check():
+                threat = None
+            else:
+                nb = board.copy()
+                nb.push(chess.Move.null())
+                threat = bot_blunder.opponent_threat(nb)
+            phase = analysis.game_phase(board)
+
+            # When the gate fires we request the wider CAND_K set and try to
+            # pick a survivor (a candidate that ignores the threat = the causal
+            # blunder). Only ONE candidates() call happens per move: if the gate
+            # fires but finds no survivor, we REUSE this CAND_K set for the B4
+            # path (best-first, so cands[0] is B4's k=1 best) rather than making
+            # a redundant same-persona 2nd call that would cold-start the TT.
+            gate_fired = bool(threat) and bot_blunder.should_blunder(
+                persona, phase, req.ply, req.seed or 0, threat, plan
+            )
+            blundered = False
+            cands = None
+            if gate_fired:
+                cands = await bot.candidates(req.fen, k=CAND_K, elo=persona.elo)
+                survivor = bot_blunder.pick_survivor(cands, board, threat)
+                if survivor is not None:
+                    idx = survivor  # play the causal blunder, skip the B4 path
+                    blundered = True
+
+            if blundered:
+                pass  # gate fired + a survivor was chosen above
+            elif req.ply < OPENING_PLIES:
                 # Opening phase: sample among SAMPLE_K candidates for mild variety.
-                cands = await bot.candidates(req.fen, k=SAMPLE_K, elo=persona.elo)
+                # Reuse the gate's CAND_K set if present (CAND_K == SAMPLE_K).
+                if cands is None:
+                    cands = await bot.candidates(req.fen, k=SAMPLE_K, elo=persona.elo)
                 if cands:
                     mover = board.turn
                     # Convert White-POV scoreCp to MOVER-POV before sampling — a
@@ -705,7 +755,9 @@ async def bot_move(req: BotMoveRequest, bot: BotEngine = Depends(get_bot_engine)
                     )
             else:
                 # Post-opening: play the best move (candidate 0), still at strength.
-                cands = await bot.candidates(req.fen, k=1, elo=persona.elo)
+                # Reuse the gate's CAND_K set if present (cands[0] is best-first).
+                if cands is None:
+                    cands = await bot.candidates(req.fen, k=1, elo=persona.elo)
     except BotEngineUnavailable:
         return JSONResponse(
             status_code=503,

@@ -703,6 +703,15 @@ async function requestBotMove(myToken, fen) {
     if (g.personaId) body.personaId = g.personaId;
     if (typeof g.seed === 'number') body.seed = g.seed;
     body.ply = (g.movesUci || []).length;
+    // The bot's OWN recent moves (oldest-first), UCI, for the causal-blunder
+    // gate's plan_attention_set (B5/T4). Bot color = opposite of userColor: if
+    // the user is White, the bot is Black → its moves sit at ODD indices
+    // (0-based, index 0 = White's first move); if the user is Black, the bot
+    // is White → EVEN indices. Server default `recentMoves: []` keeps a bare
+    // request valid; last 8 is plenty for PLAN_MOVES=4 (each entry contributes
+    // 2 squares).
+    const botMoves = (g.movesUci || []).filter((_, i) => g.userColor === 'white' ? (i % 2 === 1) : (i % 2 === 0));
+    body.recentMoves = botMoves.slice(-8);
   }
   try {
     data = await hub().postJSON('/api/bot/move', body);

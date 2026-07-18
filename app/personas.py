@@ -38,7 +38,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class Persona:
-    """A named bot persona. ``elo`` is UCI_Elo; ``temperature`` is in centipawns."""
+    """A named bot persona. ``elo`` is UCI_Elo; ``temperature`` is in centipawns.
+
+    ``blunderRate`` and ``threatDistance`` are the B5 causal-blunder dials (both
+    ∈ [0,1]): ``blunderRate`` is the base middlegame fire probability for the
+    input-side blunder gate; ``threatDistance`` is the off-plan-score threshold a
+    missed threat must exceed to be missed (lower elo → lower threshold → misses
+    more). See ``app/bot_blunder.py`` / ``docs/ai-dlc/specs/causal-blunder.md``.
+    """
 
     id: str
     name: str
@@ -46,6 +53,8 @@ class Persona:
     style: str
     description: str
     temperature: float
+    blunderRate: float
+    threatDistance: float
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -54,6 +63,16 @@ class Persona:
 # style -> default sampling temperature (cp), used when a loaded persona omits it.
 _STYLE_TEMP = {"solid": 80, "tactical": 130, "aggressive": 200, "positional": 100}
 _DEFAULT_TEMP = 120
+
+
+def _default_blunder_rate(elo: int) -> float:
+    """Elo-derived default: monotone decreasing (spec: causal-blunder.md)."""
+    return max(0.03, min(0.9, 0.9 - (elo - 1300) / 1000))
+
+
+def _default_threat_distance(elo: int) -> float:
+    """Elo-derived default: monotone increasing (spec: causal-blunder.md)."""
+    return max(0.15, min(0.85, (elo - 1200) / 1200))
 
 DEFAULT_ID = "casey"
 
@@ -64,10 +83,10 @@ _ELO_MAX = 3000
 # The built-in ladder — hardcoded, set at import with NO file I/O. data/personas.json
 # ships the same four so the committed file and this default agree.
 _DEFAULT_PERSONAS: tuple[Persona, ...] = (
-    Persona("casey", "Casey", 1350, "solid", "Casual club player — steady, but misses tactics.", 80),
-    Persona("morgan", "Morgan", 1550, "tactical", "Improving — punishes loose play and hangs onto material.", 130),
-    Persona("alex", "Alex", 1800, "aggressive", "Strong club player — sharp, presses for the attack.", 200),
-    Persona("vera", "Vera", 2000, "positional", "Expert — grinds small edges in long games.", 100),
+    Persona("casey", "Casey", 1350, "solid", "Casual club player — steady, but misses tactics.", 80, 0.85, 0.15),
+    Persona("morgan", "Morgan", 1550, "tactical", "Improving — punishes loose play and hangs onto material.", 130, 0.65, 0.29),
+    Persona("alex", "Alex", 1800, "aggressive", "Strong club player — sharp, presses for the attack.", 200, 0.40, 0.50),
+    Persona("vera", "Vera", 2000, "positional", "Expert — grinds small edges in long games.", 100, 0.20, 0.67),
 )
 
 # Module-level singleton — initialised to the built-in default so imports never
@@ -85,20 +104,31 @@ def _style_temp(style: str) -> int:
 
 
 def _parse_persona(entry: dict) -> Persona:
-    """Build a Persona from a raw dict, deriving temperature from style if absent.
+    """Build a Persona from a raw dict, deriving temperature/blunderRate/
+    threatDistance from style/elo if absent (so an old ``data/personas.json``
+    without the B5 dials still loads).
 
     Raises on a structurally broken entry (caught by ``_load`` → keep defaults).
     """
+    elo = int(entry["elo"])
     temp = entry.get("temperature")
     if temp is None:
         temp = _style_temp(str(entry.get("style", "")))
+    blunder_rate = entry.get("blunderRate")
+    if blunder_rate is None:
+        blunder_rate = _default_blunder_rate(elo)
+    threat_distance = entry.get("threatDistance")
+    if threat_distance is None:
+        threat_distance = _default_threat_distance(elo)
     return Persona(
         id=str(entry["id"]),
         name=str(entry["name"]),
-        elo=int(entry["elo"]),
+        elo=elo,
         style=str(entry["style"]),
         description=str(entry["description"]),
         temperature=float(temp),
+        blunderRate=float(blunder_rate),
+        threatDistance=float(threat_distance),
     )
 
 
@@ -116,6 +146,10 @@ def _validate(personas: list[Persona]) -> Optional[str]:
             return f"elo {p.elo} for '{p.id}' out of range [{_ELO_MIN}, {_ELO_MAX}]"
         if not math.isfinite(p.temperature) or p.temperature <= 0:
             return f"temperature {p.temperature} for '{p.id}' not finite and > 0"
+        if not (0.0 <= p.blunderRate <= 1.0):
+            return f"blunderRate {p.blunderRate} for '{p.id}' out of range [0, 1]"
+        if not (0.0 <= p.threatDistance <= 1.0):
+            return f"threatDistance {p.threatDistance} for '{p.id}' out of range [0, 1]"
     return None
 
 

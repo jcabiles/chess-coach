@@ -6,7 +6,9 @@
       "elo": 1350,
       "style": "solid",
       "description": "Casual club player — steady, but misses tactics.",
-      "temperature": 80
+      "temperature": 80,
+      "blunderRate": 0.85,
+      "threatDistance": 0.15
     },
     {
       "id": "morgan",
@@ -14,7 +16,9 @@
       "elo": 1550,
       "style": "tactical",
       "description": "Improving — punishes loose play and hangs onto material.",
-      "temperature": 130
+      "temperature": 130,
+      "blunderRate": 0.65,
+      "threatDistance": 0.29
     },
     {
       "id": "alex",
@@ -22,7 +26,9 @@
       "elo": 1800,
       "style": "aggressive",
       "description": "Strong club player — sharp, presses for the attack.",
-      "temperature": 200
+      "temperature": 200,
+      "blunderRate": 0.40,
+      "threatDistance": 0.50
     },
     {
       "id": "vera",
@@ -30,7 +36,9 @@
       "elo": 2000,
       "style": "positional",
       "description": "Expert — grinds small edges in long games.",
-      "temperature": 100
+      "temperature": 100,
+      "blunderRate": 0.20,
+      "threatDistance": 0.67
     }
   ]
 }

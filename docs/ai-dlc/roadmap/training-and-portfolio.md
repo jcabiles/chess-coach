@@ -155,9 +155,10 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
 > 2026-07-16): all eight slices sum to 15–21 working days (~3–4 weeks).
 > **Phase A (inside the 2-week appetite): B1 → B2 → B3 → B4 → B8 → B6**
 > (research, skeleton, N1 save-loop, persona-ladder, personal-ELO, takebacks —
-> a complete playable core). **Status 2026-07-17: PHASE A COMPLETE — B1, B2, B3,
-> B4, B8, B6 all shipped. Phase B (B5 causal-blunder model + B7 clocks) needs an
-> explicit user re-up.** **B4 pulled into Phase A + resequenced ahead of B8
+> a complete playable core). **Status 2026-07-18: PHASE A COMPLETE + B5 SHIPPED —
+> B1, B2, B3, B4, B8, B6, B5 all done. Only B7 (clocks) remains in the whole
+> chapter. B5 (the causal-blunder model, the marquee "realistic bots" feature)
+> was built on a user re-up; B7 is the last slice.** **B4 pulled into Phase A + resequenced ahead of B8
 > 2026-07-16 (user call):** a personal-ELO trend is only meaningful against a
 > rated LADDER of opponents, so the persona ladder ships first; B8 then tracks
 > results across the ladder. **Phase B (B5, B7, ~5–8 days) exceeds the stated
@@ -247,7 +248,7 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       watchdog restart), mate→±MATE_CP, bare-`{fen}` B3-parity, save
       server-resolves persona Elo. Variety measured: 5 distinct first moves /
       12 seeds. Personas ride `headers_json` (personaId+personaElo) for B8.
-- [ ] **B5. Human-like blunder + style model** — problem: P2's core — the
+- [x] **B5. Human-like blunder + style model** — problem: P2's core — the
       user's explicit requirement that low-ELO bots fail *causally* (miss your
       threat while pursuing their own plan), not randomly · outcome-link: N3 ·
       scope: implement B1's recommended error model, style-conditioned per
@@ -261,7 +262,20 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       move selection; model must be deterministic-ish/seedable for tests ·
       **hard-gated on B1 · depends on B4** (style-conditioning needs the
       personas) · Phase B · ICE 5·3·2=30 (highest value, most uncertain —
-      ICE kept honest)
+      ICE kept honest) · **Shipped 2026-07-18 (PR pending):** Gate-1 scoped to
+      the **signature plan-fixation mechanism (A) + low-band drop**, deferring
+      C (calculation-decay). Pure engine-free `app/bot_blunder.py`: detect the
+      opponent's threat (incl. a mate-in-1 scan) → if it's OFF the bot's plan
+      attention-set + severity/persona/seed gates fire, drop threat-neutralizing
+      candidates so the bot plays its best remaining plan move (input-side, never
+      random). Research-calibrated per-persona dials (blunderRate/threatDistance),
+      bigger threats damped (severity_damp) so mate/queen rarely missed;
+      deterministic per seed; **never leaks into the user's analysis**. Validated:
+      unit tests + a ladder-monotonicity harness (Casey 81% → Vera 19% miss) +
+      live server proof (Casey ignores an off-plan hanging knight, Vera defends,
+      legacy=full-strength). Refuter PASS. **Tuning note:** Casey's hanging-queen
+      miss ~33% (MISS_REF=350 dial) may read blundery — tune `data/personas.json`
+      after playtesting. Coach narration of the "why" deferred (internal only).
 - [x] **B6. Takeback control** — problem: P3 — punishing a mis-click/stupid
       blunder with a lost game kills training value; user wants it policed,
       not free · outcome-link: N3 · scope: per-match setting **never / up to
