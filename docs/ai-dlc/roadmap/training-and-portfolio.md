@@ -416,7 +416,11 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
 > B2–B9 wiring notes in specs). Dependency-gated order M1→M6; **user owns
 > final order + promotions**.
 
-- [ ] **M1. Maia engine walking skeleton** — problem: P5 — no lc0 move path
+- [x] **M1. Maia engine walking skeleton** — DONE 2026-07-18 (browser-verified:
+      Ming Ling on live Maia — 1.e4 e5 2.Nf3 d6 3.Nc3 Nf6 4.d4 Nc6; kill-lc0
+      mid-game → same-request SF fallback + indicator flip + auto-respawn next
+      move; 992 tests engine-free; no orphan lc0 on shutdown) — problem: P5 —
+      no lc0 move path
       exists (`detect_maia()` is detection-only) · outcome-link: N3 ·
       scope: new `app/maia_engine.py` mirroring the `bot_engine.py` idiom
       (own subprocess, own asyncio.Lock, lazy start, watchdog restart,
