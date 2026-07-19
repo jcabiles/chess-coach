@@ -22,7 +22,7 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 import chess
 import chess.pgn
@@ -674,6 +674,133 @@ class BotStatusResponse(BaseModel):
 # override it via ``app.dependency_overrides[get_bot_engine]`` per the spec.
 
 
+async def select_persona_move(
+    bot: BotEngine,
+    persona: personas.Persona,
+    fen: str,
+    ply: int,
+    seed: int,
+    recent_moves: list[str],
+) -> Optional[dict]:
+    """Choose a persona's move for *fen* — THE bot move-selection pipeline.
+
+    Extracted from the ``/api/bot/move`` route (M3 anti-drift fold) so the
+    realism-audit harness measures EXACTLY what the API plays — one pipeline,
+    no copy-paste divergence. The route and ``tools/realism_audit.py`` both
+    call this; a fakes-based parity test pins them together.
+
+    Order (unchanged from B4/B5/B9/M1/M2): Maia-first for wired personas
+    (seeded policy sample, same-request SF fallback on MaiaUnavailable) →
+    causal-blunder gate (fires ⇒ wider CAND_K + pick_survivor) → opening
+    sampling (ply < OPENING_PLIES) → mistake tier → best move. Only ONE
+    ``candidates()`` call happens per move (gate-fetched CAND_K sets are
+    reused — CAND_K == SAMPLE_K == MISTAKE_K).
+
+    Returns ``{"uci": str, "engine": "maia"|"stockfish"}``, or ``None`` when
+    the engine yielded no usable candidate (route maps that to 503).
+
+    Raises:
+        BotEngineUnavailable: propagated from ``candidates()`` (route → 503).
+        ValueError: on an invalid FEN (callers validate first).
+    """
+    board = chess.Board(fen)
+
+    # Maia-first: a Maia-wired persona plays a seeded sample from the
+    # human-trained net's policy — the SF pipeline below (gate / sampling /
+    # mistake) does NOT run for it (Maia already encodes human error;
+    # layering synthetic weakness on top double-applies). ANY Maia failure
+    # falls through to the ENTIRE Stockfish block in the same request.
+    if maia_ready_for(persona.id):
+        try:
+            maia_result = await get_maia_engine().top_move(fen, persona.id)
+            # M2 variety: seeded sample from the policy priors (same
+            # hash((seed, ply)) idiom as SF opening sampling). Resolve
+            # chosen_uci first; any sampling-path problem — None,
+            # unparseable, or illegal — yields the engine-guaranteed-legal
+            # argmax, still engine="maia".
+            chosen_uci = maia_result["uci"]
+            sampled = pick_from_priors(maia_result["priors"], hash((seed, ply)))
+            if sampled is not None:
+                try:
+                    if chess.Move.from_uci(sampled) in board.legal_moves:
+                        chosen_uci = sampled
+                except ValueError:
+                    pass  # malformed uci from a fake/parser edge
+            return {"uci": chosen_uci, "engine": "maia"}
+        except MaiaUnavailable:
+            pass  # same-request fallback: weakened-SF path below
+
+    # B5 causal-blunder gate, computed FIRST (pure, cheap) so the wider
+    # candidate budget + the k increase are confined to induced-blunder
+    # moves — a quiet position keeps B4's k=1 + best. The threat belongs
+    # to the OPPONENT, who moves after the bot; a null-move board makes
+    # "the side to move" the opponent so opponent_threat sees THEIR
+    # threats, not the bot's. A bot in check must respond (no plausible
+    # "miss") → skip the gate.
+    plan = bot_blunder.plan_attention_set(recent_moves, board)
+    if board.is_check():
+        threat = None
+    else:
+        nb = board.copy()
+        nb.push(chess.Move.null())
+        threat = bot_blunder.opponent_threat(nb)
+    phase = analysis.game_phase(board)
+
+    # When the gate fires we request the wider CAND_K set and try to pick a
+    # survivor (a candidate that ignores the threat = the causal blunder).
+    # If the gate fires but finds no survivor, we REUSE this CAND_K set for
+    # the B4 path (best-first, so cands[0] is B4's k=1 best) rather than
+    # making a redundant same-persona 2nd call that would cold-start the TT.
+    gate_fired = bool(threat) and bot_blunder.should_blunder(
+        persona, phase, ply, seed, threat, plan
+    )
+    idx = 0
+    blundered = False
+    cands = None
+    if gate_fired:
+        cands = await bot.candidates(fen, k=CAND_K, elo=persona.elo)
+        survivor = bot_blunder.pick_survivor(cands, board, threat)
+        if survivor is not None:
+            idx = survivor  # play the causal blunder, skip the B4 path
+            blundered = True
+
+    if blundered:
+        pass  # gate fired + a survivor was chosen above
+    elif ply < OPENING_PLIES:
+        # Opening phase: sample among SAMPLE_K candidates for mild variety.
+        # Reuse the gate's CAND_K set if present (CAND_K == SAMPLE_K).
+        if cands is None:
+            cands = await bot.candidates(fen, k=SAMPLE_K, elo=persona.elo)
+        if cands:
+            mover = board.turn
+            # Convert White-POV scoreCp to MOVER-POV before sampling — a
+            # raw-White-POV softmax makes a Black bot prefer its worst moves.
+            mover_scores = [
+                c["scoreCp"] if mover == chess.WHITE else -c["scoreCp"]
+                for c in cands
+            ]
+            idx = personas.weighted_choice(
+                mover_scores, persona.temperature, hash((seed, ply))
+            )
+    elif persona.mistakeRate and bot_blunder.should_mistake(persona, phase, ply, seed):
+        # Mistake tier (sloppy personas): with prob mistakeRate, trade DOWN
+        # from best into the 50–250cp inaccuracy band. The blunder gate
+        # already ran FIRST and short-circuited above (a persona move
+        # blunders OR mistakes, never both). Reuse the gate's CAND_K set if
+        # it fetched one; else one MISTAKE_K (==CAND_K) call.
+        cands = cands or await bot.candidates(fen, k=MISTAKE_K, elo=persona.elo)
+        idx = bot_blunder.pick_mistake(cands, board, seed, ply)
+    else:
+        # Post-opening: play the best move (candidate 0), still at strength.
+        # Reuse the gate's CAND_K set if present (cands[0] is best-first).
+        if cands is None:
+            cands = await bot.candidates(fen, k=1, elo=persona.elo)
+
+    if not cands:
+        return None
+    return {"uci": cands[idx]["uci"], "engine": "stockfish"}
+
+
 @app.post("/api/bot/move", response_model=BotMoveResponse)
 async def bot_move(req: BotMoveRequest, bot: BotEngine = Depends(get_bot_engine)):
     """Ask the bot for its move in ``req.fen`` and return the resulting position.
@@ -715,131 +842,24 @@ async def bot_move(req: BotMoveRequest, bot: BotEngine = Depends(get_bot_engine)
         )
 
     # Resolve the persona (None ⇒ legacy B3 bot) BEFORE touching the engine so an
-    # unknown id is rejected without a search. The engine call + sampling differ
-    # per branch, but both funnel into one candidate-list guard + play block.
-    idx = 0
+    # unknown id is rejected without a search. Persona selection is delegated to
+    # select_persona_move — the SHARED function the realism-audit harness also
+    # imports (M3 anti-drift fold: one pipeline, no copy-paste divergence).
     try:
         if req.personaId is None:
             # Legacy branch — byte-identical to B3: k=1, no strength change (Elo
             # stays 1350), candidate 0, no sampling.
             cands = await bot.candidates(req.fen, k=1)
+            chosen = {"uci": cands[0]["uci"], "engine": "stockfish"} if cands else None
         else:
             persona = personas.get(req.personaId)
             if persona is None:
                 raise HTTPException(
                     status_code=400, detail=f"Unknown personaId {req.personaId!r}."
                 )
-
-            # Maia-first: a Maia-wired persona plays a seeded sample from the
-            # human-trained net's policy — the SF persona pipeline below (gate /
-            # sampling / mistake) does NOT run for it (Maia already encodes
-            # human error; layering synthetic weakness on top double-applies —
-            # spec landmine 6). ANY Maia failure falls through to the ENTIRE
-            # existing Stockfish block in the same request.
-            if maia_ready_for(persona.id):
-                try:
-                    maia_result = await get_maia_engine().top_move(
-                        req.fen, persona.id
-                    )
-                    # M2 variety: seeded sample from the policy priors (same
-                    # hash((seed, ply)) idiom as SF opening sampling). Resolve
-                    # chosen_uci FIRST, then build move/SAN/push from it alone
-                    # (review fold: the SAN/UCI/FEN triple must never mix the
-                    # sampled and argmax moves). Any sampling-path problem —
-                    # None, unparseable, or illegal — yields the engine-
-                    # guaranteed-legal argmax, still engine="maia".
-                    chosen_uci = maia_result["uci"]
-                    sampled = pick_from_priors(
-                        maia_result["priors"], hash((req.seed or 0, req.ply))
-                    )
-                    if sampled is not None:
-                        try:
-                            if chess.Move.from_uci(sampled) in board.legal_moves:
-                                chosen_uci = sampled
-                        except ValueError:
-                            pass  # malformed uci from a fake/parser edge
-                    maia_move = chess.Move.from_uci(chosen_uci)
-                    maia_san = board.san(maia_move)  # SAN BEFORE pushing
-                    board.push(maia_move)
-                    return BotMoveResponse(
-                        moveUci=maia_move.uci(),
-                        moveSan=maia_san,
-                        fen=board.fen(),
-                        engine="maia",
-                    )
-                except MaiaUnavailable:
-                    pass  # same-request fallback: weakened-SF path below
-
-            # B5 causal-blunder gate, computed FIRST (pure, cheap) so the wider
-            # candidate budget + the k increase are confined to induced-blunder
-            # moves — a quiet position keeps B4's k=1 + best. The threat belongs
-            # to the OPPONENT, who moves after the bot; a null-move board makes
-            # "the side to move" the opponent so opponent_threat sees THEIR
-            # threats, not the bot's. A bot in check must respond (no plausible
-            # "miss") → skip the gate.
-            plan = bot_blunder.plan_attention_set(req.recentMoves, board)
-            if board.is_check():
-                threat = None
-            else:
-                nb = board.copy()
-                nb.push(chess.Move.null())
-                threat = bot_blunder.opponent_threat(nb)
-            phase = analysis.game_phase(board)
-
-            # When the gate fires we request the wider CAND_K set and try to
-            # pick a survivor (a candidate that ignores the threat = the causal
-            # blunder). Only ONE candidates() call happens per move: if the gate
-            # fires but finds no survivor, we REUSE this CAND_K set for the B4
-            # path (best-first, so cands[0] is B4's k=1 best) rather than making
-            # a redundant same-persona 2nd call that would cold-start the TT.
-            gate_fired = bool(threat) and bot_blunder.should_blunder(
-                persona, phase, req.ply, req.seed or 0, threat, plan
+            chosen = await select_persona_move(
+                bot, persona, req.fen, req.ply, req.seed or 0, req.recentMoves
             )
-            blundered = False
-            cands = None
-            if gate_fired:
-                cands = await bot.candidates(req.fen, k=CAND_K, elo=persona.elo)
-                survivor = bot_blunder.pick_survivor(cands, board, threat)
-                if survivor is not None:
-                    idx = survivor  # play the causal blunder, skip the B4 path
-                    blundered = True
-
-            if blundered:
-                pass  # gate fired + a survivor was chosen above
-            elif req.ply < OPENING_PLIES:
-                # Opening phase: sample among SAMPLE_K candidates for mild variety.
-                # Reuse the gate's CAND_K set if present (CAND_K == SAMPLE_K).
-                if cands is None:
-                    cands = await bot.candidates(req.fen, k=SAMPLE_K, elo=persona.elo)
-                if cands:
-                    mover = board.turn
-                    # Convert White-POV scoreCp to MOVER-POV before sampling — a
-                    # raw-White-POV softmax makes a Black bot prefer its worst moves.
-                    mover_scores = [
-                        c["scoreCp"] if mover == chess.WHITE else -c["scoreCp"]
-                        for c in cands
-                    ]
-                    idx = personas.weighted_choice(
-                        mover_scores, persona.temperature, hash((req.seed or 0, req.ply))
-                    )
-            elif persona.mistakeRate and bot_blunder.should_mistake(
-                persona, phase, req.ply, req.seed or 0
-            ):
-                # Mistake tier (sloppy personas): with prob mistakeRate, trade
-                # DOWN from best into the 50–250cp inaccuracy band. The blunder
-                # gate already ran FIRST and short-circuited above (a persona move
-                # blunders OR mistakes, never both). Reuse the gate's CAND_K set
-                # if it fetched one; else one MISTAKE_K (==CAND_K) call — single
-                # candidates() call per move, no TT cold-start.
-                cands = cands or await bot.candidates(
-                    req.fen, k=MISTAKE_K, elo=persona.elo
-                )
-                idx = bot_blunder.pick_mistake(cands, board, req.seed or 0, req.ply)
-            else:
-                # Post-opening: play the best move (candidate 0), still at strength.
-                # Reuse the gate's CAND_K set if present (cands[0] is best-first).
-                if cands is None:
-                    cands = await bot.candidates(req.fen, k=1, elo=persona.elo)
     except BotEngineUnavailable:
         return JSONResponse(
             status_code=503,
@@ -851,20 +871,24 @@ async def bot_move(req: BotMoveRequest, bot: BotEngine = Depends(get_bot_engine)
             },
         )
 
-    # candidates() drops entries with no PV, so it can return [] even for a
-    # non-terminal position (e.g. the engine yielded no usable line at the fixed
-    # budget). Treat that as a recoverable engine failure (503 → client Retry),
-    # not an unhandled IndexError (500).
-    if not cands:
+    # select_persona_move returns None when the engine yielded no usable line
+    # (candidates() can legally return [] at the fixed budget). Recoverable
+    # engine failure (503 → client Retry), not an unhandled IndexError (500).
+    if chosen is None:
         return JSONResponse(
             status_code=503,
             content={"detail": "Bot engine returned no move. Please retry."},
         )
 
-    move = chess.Move.from_uci(cands[idx]["uci"])
+    move = chess.Move.from_uci(chosen["uci"])
     move_san = board.san(move)  # render SAN BEFORE pushing
     board.push(move)
-    return BotMoveResponse(moveUci=move.uci(), moveSan=move_san, fen=board.fen())
+    return BotMoveResponse(
+        moveUci=move.uci(),
+        moveSan=move_san,
+        fen=board.fen(),
+        engine=chosen["engine"],
+    )
 
 
 @app.get("/api/bot/status", response_model=BotStatusResponse)
