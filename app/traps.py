@@ -273,6 +273,56 @@ def iter_mainline_ucis() -> list[list[str]]:
     return lines
 
 
+def iter_victim_epds() -> set[str]:
+    """Return the EPDs of every position reached by a **victim**-side trap move.
+
+    For each loaded variation, replay the ``leadInSan`` prefix then the ``mainLine``
+    UCIs, collecting ``board.epd()`` after any ply whose step is tagged
+    ``side == "victim"`` (the trap's *losing* moves — the bait and the follow-up
+    blunders). A missing ``side`` key is treated as NOT victim (never blocked).
+
+    This is the opening-book **blocklist**: :mod:`app.book` subtracts these positions
+    from the book so that playing into a trap's losing side in live play falls through
+    to the engine and gets a real quality label, instead of being silently treated as
+    "book" theory (which the book fast-path would otherwise do, since trap mainlines
+    are seeded into the book). Subtracting by *reached position* also un-books blunders
+    that a sound opening-DB line happens to transpose into.
+
+    Exception-safe: a malformed lead-in or variation is skipped (logged at debug),
+    never raised; returns an empty set if nothing is loaded. (Runs inside the app
+    lifespan — it must not crash startup.)
+    """
+    epds: set[str] = set()
+    for trap in traps_by_id.values():
+        try:
+            lead = chess.Board()
+            for san in trap.get("leadInSan", []):
+                lead.push_san(san)
+        except Exception as exc:
+            logger.debug(
+                "traps.iter_victim_epds: bad leadInSan for %r: %s", trap.get("id"), exc
+            )
+            continue
+
+        for variation in trap.get("variations", []):
+            board = lead.copy()
+            try:
+                for step in variation.get("mainLine", []):
+                    uci = step.get("uci")
+                    if not uci:
+                        break
+                    board.push_uci(uci)
+                    if step.get("side") == "victim":
+                        epds.add(board.epd())
+            except Exception as exc:
+                logger.debug(
+                    "traps.iter_victim_epds: bad variation in %r: %s",
+                    trap.get("id"), exc,
+                )
+                continue
+    return epds
+
+
 def mainline_ucis_for(trap_id: str, variation: int = 0) -> list[str]:
     """Return ONE trap variation's mainline as a full UCI line from the start.
 

@@ -74,3 +74,32 @@ def test_empty_index_never_book():
     book.load(MISSING)
     assert book._index.empty is True
     assert book.is_book_move(START, "e2e4") is False
+
+
+def test_blocklist_unbooks_position():
+    # A position that would otherwise be book is removed by the blocklist.
+    line = ["e2e4", "e7e5", "g1f3"]
+    b = chess.Board()
+    b.push_uci("e2e4")
+    b.push_uci("e7e5")
+    blocked = b.copy()
+    blocked.push_uci("g1f3")  # the position reached by g1f3
+    book.load(FIXTURE, lines=[line], trap_ucis=[], blocklist_epds=[blocked.epd()])
+    assert book.is_book_move(b.fen(), "g1f3") is False
+    book.load(MISSING)
+
+
+def test_blocklist_is_in_cache_signature():
+    # Same lines/trap_ucis but a different blocklist MUST rebuild the index (else a
+    # stale cached book would ignore the blocklist change).
+    line = ["e2e4", "e7e5", "g1f3"]
+    b = chess.Board()
+    b.push_uci("e2e4")
+    b.push_uci("e7e5")
+    blocked = b.copy()
+    blocked.push_uci("g1f3")
+    book.load(FIXTURE, lines=[line], trap_ucis=[])  # no blocklist → g1f3 is book
+    assert book.is_book_move(b.fen(), "g1f3") is True
+    book.load(FIXTURE, lines=[line], trap_ucis=[], blocklist_epds=[blocked.epd()])
+    assert book.is_book_move(b.fen(), "g1f3") is False  # rebuilt, not stale
+    book.load(MISSING)

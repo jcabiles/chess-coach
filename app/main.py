@@ -162,6 +162,11 @@ async def lifespan(app: FastAPI):
             str(BOOK_FILE),
             lines=openings.iter_lines(),
             trap_ucis=list(traps.iter_mainline_ucis()) + list(repertoire.iter_lines()),
+            # Un-book every trap's victim-side (losing) positions so a blunder played
+            # into a known trap falls through to the engine and gets a quality label,
+            # instead of being silently treated as book theory (subtracted last, so it
+            # also un-books blunders a sound opening-DB line transposes into).
+            blocklist_epds=traps.iter_victim_epds(),
         )
     except Exception as exc:  # pragma: no cover - defensive; book degrades to empty
         logger.warning("Opening book unavailable (continuing without it): %s", exc)

@@ -21,6 +21,7 @@ def real_book():
         "data/book.json",
         lines=openings.iter_lines(),
         trap_ucis=traps.iter_mainline_ucis(),
+        blocklist_epds=traps.iter_victim_epds(),  # mirror the real startup wiring
     )
     yield book
     book.load("tests/fixtures/does_not_exist.json")  # reset to empty afterwards
@@ -70,11 +71,52 @@ def test_flank_and_offbeat_not_book(real_book):
     assert book.is_book_move(b.fen(), "a2a4") is False   # offbeat
 
 
-def test_trap_continuation_recognized(real_book):
-    lines = traps.iter_mainline_ucis()
-    assert lines, "expected trap mainlines to be available"
-    line = lines[0]
+def test_trap_lead_in_and_trapper_moves_are_book(real_book):
+    # A trap's setup (lead-in) and trapper-side replies stay book — only the victim's
+    # losing moves are un-booked. Blackburne Shilling: lead-in all book; 4...Qg5 (the
+    # trapper's winning reply, played after 4.Nxe5) stays book.
+    assert _all_book(["e4", "e5", "Nf3", "Nc6", "Bc4", "Nd4"])
     b = chess.Board()
-    for u in line[:-1]:
-        b.push_uci(u)
-    assert book.is_book_move(b.fen(), line[-1]) is True
+    for san in ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nd4", "Nxe5"]:
+        b.push_san(san)
+    assert book.is_book_move(b.fen(), b.parse_san("Qg5").uci()) is True
+
+
+def test_no_trap_victim_position_is_book(real_book):
+    # Regression guard for the core bug: EVERY trap's victim-side (losing) position
+    # must be un-booked so the blunder falls through to the engine and gets a quality
+    # label in live play. Covers all 19 traps, including transposition-escape traps
+    # whose victim position is ALSO reachable via a sound opening-DB line (the
+    # blocklist subtraction is what handles those).
+    checked = 0
+    for trap in traps.traps_by_id.values():
+        lead = chess.Board()
+        try:
+            for san in trap.get("leadInSan", []):
+                lead.push_san(san)
+        except ValueError:
+            continue
+        for variation in trap.get("variations", []):
+            b = lead.copy()
+            for step in variation.get("mainLine", []):
+                uci = step.get("uci")
+                if not uci:
+                    break
+                fen_before = b.fen()
+                b.push_uci(uci)
+                if step.get("side") == "victim":
+                    assert book.is_book_move(fen_before, uci) is False, (
+                        f"{trap.get('id')}: victim move {uci} is still in book"
+                    )
+                    checked += 1
+    assert checked > 0, "expected at least one victim-side trap move to check"
+
+
+def test_fried_liver_victim_not_book_despite_opening_db(real_book):
+    # Fried Liver's 5...Nxd5?! is a real opening-DB line AND a trap victim move. A
+    # naive "skip victim plies in the trap seed" would leave it booked by the opening
+    # DB; the blocklist subtraction un-books it regardless of source.
+    b = chess.Board()
+    for san in ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "Ng5", "d5", "exd5"]:
+        b.push_san(san)
+    assert book.is_book_move(b.fen(), b.parse_san("Nxd5").uci()) is False
