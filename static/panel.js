@@ -217,16 +217,19 @@ function fmtLineEval(line) {
 }
 
 // Render a compact "· or Nf3 (+0.2)" 2nd-best entry into `el`; blank when absent.
-function renderSecond(el, line) {
+// `hideEval` (blunders-only "hide evaluation score") omits the "(+0.2)" annotation
+// — the move itself is coaching, the number is the leak.
+function renderSecond(el, line, hideEval) {
   if (!el) return;
-  el.textContent = line && line.moveSan ? `· or ${line.moveSan}${fmtLineEval(line)}` : '';
+  el.textContent = line && line.moveSan ? `· or ${line.moveSan}${hideEval ? '' : fmtLineEval(line)}` : '';
 }
 
 // Render the retrospective block from a BestLine (+ optional 2nd). PV numbering
 // is computed from the position at `pvCursor` (the mover's own turn — a different
 // side-to-move than the current PV). `label` sets the block heading. Hides the
 // whole block when there's no move or `pvCursor` is out of range (guards cursor 0).
-function renderRetroBlock(retroBest, retroSecond, pvCursor, label) {
+// `hideEval` threads through to the 2nd-best line (see renderSecond).
+function renderRetroBlock(retroBest, retroSecond, pvCursor, label, hideEval) {
   const block = byId('retro-block');
   if (!block) return;
   if (!retroBest || !retroBest.moveSan || pvCursor < 0) {
@@ -241,7 +244,7 @@ function renderRetroBlock(retroBest, retroSecond, pvCursor, label) {
   const bmEl = byId('retro-best');
   if (bmEl) bmEl.textContent = retroBest.moveSan;
 
-  renderSecond(byId('retro-second'), retroSecond);
+  renderSecond(byId('retro-second'), retroSecond, hideEval);
 
   const pvEl = byId('retro-pv');
   if (pvEl) {
@@ -281,11 +284,18 @@ function clearDualBest() {
 // ---------------------------------------------------------------------------
 export function renderAnalysisPanel(a, opts = {}) {
   // --- Eval bar ---
+  // Always paint the true fill, even while suppressEval is set — the bar is a
+  // CSS-class hide (see app.js syncEvalBarHidden), never a fabricated value, so
+  // an un-hide is instantly correct. (A neutral-fill fallback here was tried and
+  // reverted: it made the bar visibly WRONG — not just hidden — across the Off
+  // transition and during the brief window before refreshAnalysis() repaints.)
   setEvalBar(evalBarFill(a));
 
   // --- Eval text ---
+  // suppressEval (blunders-only "hide evaluation score") blanks the numeric
+  // readout; the win-chances bar stays hidden via the CSS class (see app.js).
   const evalEl = byId('eval');
-  if (evalEl) evalEl.textContent = formatEval(a);
+  if (evalEl) evalEl.textContent = opts.suppressEval ? '—' : formatEval(a);
 
   // --- Quality (color + icon + text) ---
   const qEl = byId('quality');
@@ -340,11 +350,11 @@ export function renderAnalysisPanel(a, opts = {}) {
     clearDualBest();
     return;
   }
-  renderSecond(byId('best-second'), a && a.secondLine);
+  renderSecond(byId('best-second'), a && a.secondLine, opts.suppressEval);
   const st = _api && _api.actions && _api.actions.getState ? _api.actions.getState() : null;
   const cursor = st ? st.cursor : 0;
   // Retro PV is from the mover's own turn → the position at cursor - 1.
-  renderRetroBlock(a && a.retroBest, a && a.retroSecond, cursor - 1, 'Your move — best');
+  renderRetroBlock(a && a.retroBest, a && a.retroSecond, cursor - 1, 'Your move — best', opts.suppressEval);
 }
 
 // ---------------------------------------------------------------------------
@@ -389,9 +399,11 @@ export function renderBookMovePanel(data) {
 // badge in the quality slot, and — when available — CARRIES OVER the last
 // own-move retrospective (`carriedRetro = { retroBest, retroSecond }`) so the
 // panel isn't blank about your play. `pvCursor` is the position index of that
-// prior own move (its own turn) for correct PV numbering.
+// prior own move (its own turn) for correct PV numbering. `hideEval` (blunders-only
+// "hide evaluation score") threads through to the carried retrospective's 2nd-best
+// line — a skipped opponent ply must not leak the score of a carried-over blunder.
 // ---------------------------------------------------------------------------
-export function renderSkippedPanel(carriedRetro = null, pvCursor = -1) {
+export function renderSkippedPanel(carriedRetro = null, pvCursor = -1, hideEval = false) {
   // Eval bar → neutral
   setEvalBar(50);
 
@@ -425,6 +437,7 @@ export function renderSkippedPanel(carriedRetro = null, pvCursor = -1) {
       carriedRetro.retroSecond,
       pvCursor,
       'Your last move — best',
+      hideEval,
     );
   } else {
     const block = byId('retro-block');
