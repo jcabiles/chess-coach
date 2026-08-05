@@ -101,6 +101,17 @@ const VALID_ANALYSIS_MODES = ['full', 'blunders', 'off'];
 const _savedAnalysisMode = readUiPrefs().analysisMode;
 let analysisMode = VALID_ANALYSIS_MODES.includes(_savedAnalysisMode) ? _savedAnalysisMode : 'full';
 
+// Blunders-only sub-setting: hide the numeric eval + win-chances bar so the mode
+// stays a disaster warning, not a continuous cheat code. Default ON (absent → true).
+let blundersHideEval = readUiPrefs().blundersHideEval !== false;
+
+// Whether the win-chances bar is currently forced hidden by the hide-eval
+// sub-setting. Maintained ONLY from mode transitions (setAnalysisMode) and the
+// hide-eval checkbox — never derived at render time — so that switching Blunders
+// (hide ON) → Off RETAINS the hidden state instead of revealing the true bar
+// (Off itself never sets suppressEval, so there is nothing else to gate on).
+let evalDisplaySuppressed = analysisMode === 'blunders' && blundersHideEval;
+
 function shouldAnalyzeMove(moverColor) {
   if (analysisMode === 'off') return false;
   return analyzeColor === 'both' || moverColor === analyzeColor;
@@ -924,8 +935,12 @@ function renderAnalysis(a, opts = {}) {
 function analysisOpts(a) {
   if (analysisMode !== 'blunders') return {};
   const q = a && a.quality;
-  if (q === 'blunder' || q === 'checkmate' || q === 'draw') return {};
-  return { suppressQuality: true, suppressRetro: true, suppressBest: true };
+  // Hide-eval sub-setting: unlike best-move + PV (which reappear on a flagged
+  // blunder), the score stays hidden for every move — blunder, checkmate and
+  // draw included. You get a warning, never a number.
+  const evalOpts = blundersHideEval ? { suppressEval: true } : {};
+  if (q === 'blunder' || q === 'checkmate' || q === 'draw') return evalOpts;
+  return { suppressQuality: true, suppressRetro: true, suppressBest: true, ...evalOpts };
 }
 
 // Book move: the server skipped Stockfish (the line is known theory), so there is
@@ -953,7 +968,9 @@ function renderSkipped() {
     carried = null;
     pvCursor = -1;
   }
-  renderSkippedPanel(carried, pvCursor);
+  // Carried retro is only ever from a flagged blunder (guard above), so the same
+  // hide-eval sub-setting that suppresses its score at analysisOpts() time applies.
+  renderSkippedPanel(carried, pvCursor, analysisMode === 'blunders' && blundersHideEval);
 }
 
 // Render a play-mode /api/move response: a book move shows the badge (no engine
@@ -1535,6 +1552,8 @@ function init() {
   // semantics). The header hint names a non-Full mode even while collapsed.
   const modeSegEl = byId('analysis-mode-seg');
   const modeHintEl = byId('analysis-mode-hint');
+  const hideEvalRowEl = byId('blunders-hide-eval-row');
+  const hideEvalCheckEl = byId('blunders-hide-eval');
   const MODE_HINTS = { blunders: '· Blunders only', off: '· Off' };
   const syncAnalysisMode = () => {
     if (modeSegEl) {
@@ -1543,12 +1562,27 @@ function init() {
       });
     }
     if (modeHintEl) modeHintEl.textContent = MODE_HINTS[analysisMode] || '';
+    // Hide-eval sub-setting: only visible/effective while mode === 'blunders'.
+    // Inline style, not the `hidden` attribute — .eval-bar-toggle-row's own
+    // `display: flex` out-specifies the UA [hidden] rule (same gotcha noted at
+    // style.css:306), and adding a `[hidden]` override lives outside this
+    // ticket's file scope (style.css isn't owned here).
+    if (hideEvalRowEl) hideEvalRowEl.style.display = analysisMode === 'blunders' ? '' : 'none';
+    if (hideEvalCheckEl) hideEvalCheckEl.checked = blundersHideEval;
   };
   const setAnalysisMode = (mode) => {
     if (!VALID_ANALYSIS_MODES.includes(mode) || mode === analysisMode) return;
     analysisMode = mode;
     writeUiPref('analysisMode', mode);
+    // evalDisplaySuppressed tracks the hidden state across mode transitions:
+    // entering Blunders re-derives it from the hide-eval pref; entering Full
+    // clears it (nothing is ever suppressed in Full); entering Off leaves it
+    // UNCHANGED — that retention is what keeps the bar hidden instead of
+    // revealing the true (still-suppressed) eval on that transition.
+    if (mode === 'blunders') evalDisplaySuppressed = blundersHideEval;
+    else if (mode === 'full') evalDisplaySuppressed = false;
     syncAnalysisMode();
+    syncEvalBarHidden(); // mode change flips the forced-hidden state of the bar
     emit('analysis-mode:change', mode); // movelist re-renders its quality dots
     if (mode === 'off') {
       // Off → invalidate any in-flight refreshAnalysis so its late response can't
@@ -1571,17 +1605,47 @@ function init() {
       if (btn) setAnalysisMode(btn.dataset.mode);
     });
   }
+  if (hideEvalCheckEl) {
+    hideEvalCheckEl.addEventListener('change', () => {
+      blundersHideEval = hideEvalCheckEl.checked;
+      writeUiPref('blundersHideEval', blundersHideEval);
+      evalDisplaySuppressed = blundersHideEval; // only reachable while mode === 'blunders'
+      syncEvalBarHidden();
+      if (state.mode === 'play' || state.mode === 'bot-play') {
+        // Same gate as setAnalysisMode — never hit the live engine during review replay.
+        analysisToken++;
+        refreshAnalysis();
+      }
+    });
+  }
 
   // Win-chances bar show/hide. Pure CSS hide (class on .board-wrap) — setEvalBar
-  // keeps painting underneath so a re-show is instantly current.
+  // keeps painting underneath so a re-show is instantly current. Blunders-only's
+  // "Hide evaluation score" sub-setting can also force the bar hidden (and stays
+  // forced through a transition to Off, via evalDisplaySuppressed — see above);
+  // when forced, the checkbox is disabled but its own evalBarHidden pref is never
+  // rewritten — leaving the forced state restores the user's saved choice.
   const evalBarCheckEl = byId('eval-bar-visible');
   const boardWrapEl = document.querySelector('.board-wrap');
   let evalBarHidden = readUiPrefs().evalBarHidden === true;
   const syncEvalBarHidden = () => {
-    if (boardWrapEl) boardWrapEl.classList.toggle('eval-bar-hidden', evalBarHidden);
-    if (evalBarCheckEl) evalBarCheckEl.checked = !evalBarHidden;
+    // evalDisplaySuppressed carries the hidden state through the Off transition
+    // (see setAnalysisMode) — Off itself never sets suppressEval on a render, so
+    // without this the bar would reveal the true fill the moment Off is chosen.
+    const forced = (state.mode === 'play' || state.mode === 'bot-play')
+      && ((analysisMode === 'blunders' && blundersHideEval)
+          || (analysisMode === 'off' && evalDisplaySuppressed));
+    if (boardWrapEl) boardWrapEl.classList.toggle('eval-bar-hidden', evalBarHidden || forced);
+    if (evalBarCheckEl) {
+      evalBarCheckEl.checked = !(evalBarHidden || forced);
+      evalBarCheckEl.disabled = forced;
+      evalBarCheckEl.title = forced
+        ? 'Forced hidden by "Hide evaluation score" — untick it in Blunders only, or switch to Full'
+        : '';
+    }
   };
   syncEvalBarHidden(); // apply the restored pref before first paint
+  on('mode:change', syncEvalBarHidden); // mode gate above depends on state.mode
   if (evalBarCheckEl) {
     evalBarCheckEl.addEventListener('change', () => {
       evalBarHidden = !evalBarCheckEl.checked;
