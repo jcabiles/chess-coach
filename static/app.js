@@ -101,16 +101,58 @@ const VALID_ANALYSIS_MODES = ['full', 'blunders', 'off'];
 const _savedAnalysisMode = readUiPrefs().analysisMode;
 let analysisMode = VALID_ANALYSIS_MODES.includes(_savedAnalysisMode) ? _savedAnalysisMode : 'full';
 
-// Blunders-only sub-setting: hide the numeric eval + win-chances bar so the mode
-// stays a disaster warning, not a continuous cheat code. Default ON (absent → true).
-let blundersHideEval = readUiPrefs().blundersHideEval !== false;
+// Eval display: two independent, positive-polarity switches — "Evaluation score"
+// and "Win-chances bar" — ticked = shown. Remembered per analysis-mode bucket:
+// bucket 'blunders' defaults both OFF (anti-cheat default, so Blunders-only stays
+// a disaster warning, not a continuous cheat code); bucket 'default' (shared by
+// Full and Off) defaults both ON. Both switches apply only while state.mode is
+// 'play' or 'bot-play' — review replay, trap practice and the trainers always
+// show both (see evalScoreVisible/evalBarVisible below).
+//
+// One-time migration: if the new shape is absent, read the legacy PR #73 keys
+// (blundersHideEval / evalBarHidden) into the buckets so an existing setup
+// survives; those legacy keys are then never written again.
+//
+// Normalize rather than trust: readUiPrefs() returns whatever was last written
+// to localStorage, which can be hand-edited or left over from an old/aborted
+// shape. syncEvalDisplay() runs inside init(), called unguarded at top level —
+// a thrown TypeError here means the board never renders. Build the defaults
+// object first and only overlay values that are actually booleans, so no
+// stored shape (missing bucket, non-object bucket, array, junk value) can
+// throw or leave a bucket undefined.
+function loadEvalDisplayPrefs() {
+  const prefs = readUiPrefs();
+  const d = { blunders: { score: false, bar: false }, default: { score: true, bar: true } };
+  const src = prefs.evalDisplay;
+  if (src && typeof src === 'object' && !Array.isArray(src)) {
+    for (const k of ['blunders', 'default']) {
+      const b = src[k];
+      if (b && typeof b === 'object') {
+        if (typeof b.score === 'boolean') d[k].score = b.score;
+        if (typeof b.bar === 'boolean') d[k].bar = b.bar;
+      }
+    }
+    return d;
+  }
+  if (prefs.evalBarHidden === true) d.default.bar = false;
+  if (prefs.blundersHideEval === false) d.blunders.score = true;
+  return d;
+}
+let evalDisplayPrefs = loadEvalDisplayPrefs();
 
-// Whether the win-chances bar is currently forced hidden by the hide-eval
-// sub-setting. Maintained ONLY from mode transitions (setAnalysisMode) and the
-// hide-eval checkbox — never derived at render time — so that switching Blunders
-// (hide ON) → Off RETAINS the hidden state instead of revealing the true bar
-// (Off itself never sets suppressEval, so there is nothing else to gate on).
-let evalDisplaySuppressed = analysisMode === 'blunders' && blundersHideEval;
+function evalDisplayBucket() {
+  return analysisMode === 'blunders' ? 'blunders' : 'default';
+}
+
+function evalScoreVisible() {
+  if (state.mode !== 'play' && state.mode !== 'bot-play') return true;
+  return evalDisplayPrefs[evalDisplayBucket()].score;
+}
+
+function evalBarVisible() {
+  if (state.mode !== 'play' && state.mode !== 'bot-play') return true;
+  return evalDisplayPrefs[evalDisplayBucket()].bar;
+}
 
 function shouldAnalyzeMove(moverColor) {
   if (analysisMode === 'off') return false;
@@ -930,15 +972,18 @@ function renderAnalysis(a, opts = {}) {
 // never a flag inside panel.js, which is shared with review replay (via
 // hub.renderAnalysis) and trap practice (direct renderAnalysisPanel calls);
 // those paths must not inherit the filter. Checkmate/Draw stay visible (they
-// are game-enders, not quality coaching); eval number/bar stay too, but the
-// best move + PV are suppressed so a quiet non-blunder never reveals the top line.
+// are game-enders, not quality coaching); the eval number/bar/annotations
+// follow the independent Evaluation-score / Win-chances-bar switches (see
+// evalScoreVisible/evalBarVisible — the `blunders` bucket defaults BOTH off),
+// while the best move + PV are unconditionally suppressed on a non-blunder so
+// a quiet move never reveals the top line.
 function analysisOpts(a) {
-  if (analysisMode !== 'blunders') return {};
+  // Evaluation-score switch: applies in every analysis mode (not just Blunders
+  // only), so unlike best-move + PV (which reappear on a flagged blunder in
+  // Blunders only), the score itself is a simple on/off unrelated to quality.
+  const evalOpts = evalScoreVisible() ? {} : { suppressEval: true };
+  if (analysisMode !== 'blunders') return evalOpts;
   const q = a && a.quality;
-  // Hide-eval sub-setting: unlike best-move + PV (which reappear on a flagged
-  // blunder), the score stays hidden for every move — blunder, checkmate and
-  // draw included. You get a warning, never a number.
-  const evalOpts = blundersHideEval ? { suppressEval: true } : {};
   if (q === 'blunder' || q === 'checkmate' || q === 'draw') return evalOpts;
   return { suppressQuality: true, suppressRetro: true, suppressBest: true, ...evalOpts };
 }
@@ -969,8 +1014,8 @@ function renderSkipped() {
     pvCursor = -1;
   }
   // Carried retro is only ever from a flagged blunder (guard above), so the same
-  // hide-eval sub-setting that suppresses its score at analysisOpts() time applies.
-  renderSkippedPanel(carried, pvCursor, analysisMode === 'blunders' && blundersHideEval);
+  // Evaluation-score switch that suppresses its score at analysisOpts() time applies.
+  renderSkippedPanel(carried, pvCursor, !evalScoreVisible());
 }
 
 // Render a play-mode /api/move response: a book move shows the badge (no engine
@@ -1229,6 +1274,18 @@ function enterReview(gameDetail) {
   state.cursor = 0;
 
   setMode('review');
+  // #eval and the .line-eval 2nd-best/retro annotations keep whatever text the
+  // play session last painted (the CSS hide is the only thing that changes on
+  // mode:change) until renderReplayEval() has data — reset both to the honest
+  // "no value" state now, so a failed /review fetch, or one deferred by
+  // awaitAnalysisThenLoad's poll (renderReplayEval never runs, or not for a
+  // while), can't leave the play game's stale number/annotations on screen for
+  // the review session. Text only — never paint a neutral fill into the bar
+  // here; that would fabricate a value (see panel.js). Blanking (not '—') for
+  // the annotations matches renderSecond's own empty-line behavior.
+  const evalEl = byId('eval');
+  if (evalEl) evalEl.textContent = '—';
+  document.querySelectorAll('.panel-eval-card .line-eval').forEach((n) => { n.textContent = ''; });
   showReviewUI(true);
 
   // Set the game title.
@@ -1533,7 +1590,8 @@ function init() {
   }
 
   // Analysis-mode settings: collapsible block (collapsed by default; pref-restored)
-  // holding the Full / Blunders only / Off selector and the win-chances bar toggle.
+  // holding the Full / Blunders only / Off selector and the two eval-display toggles
+  // (Evaluation score / Win-chances bar).
   const settingsToggleEl = byId('analysis-settings-toggle');
   const settingsBlockEl = settingsToggleEl ? settingsToggleEl.closest('.analysis-settings-block') : null;
   if (settingsToggleEl && settingsBlockEl) {
@@ -1548,12 +1606,64 @@ function init() {
     });
   }
 
+  // Eval display: two independent, always-visible, positive-polarity switches
+  // ("Evaluation score" / "Win-chances bar", ticked = shown) that read/write the
+  // evalDisplayPrefs bucket for the CURRENT analysis mode. Declared before the
+  // mode selector below so setAnalysisMode can re-sync them on a mode switch.
+  const evalScoreCheckEl = byId('eval-score-visible');
+  const evalBarCheckEl = byId('eval-bar-visible');
+  const boardWrapEl = document.querySelector('.board-wrap');
+  // #eval lives in .panel-eval-card (NOT .board-wrap — verified in index.html:245-250,
+  // "<div class=\"panel-eval-card\">" wraps "<div id=\"eval\" class=\"eval\">").
+  const evalCardEl = document.querySelector('.panel-eval-card');
+  const syncEvalDisplay = () => {
+    const bucket = evalDisplayPrefs[evalDisplayBucket()];
+    if (evalScoreCheckEl) evalScoreCheckEl.checked = bucket.score;
+    if (evalBarCheckEl) evalBarCheckEl.checked = bucket.bar;
+    // Pure CSS hide (class toggle) — the render path always paints the true
+    // value underneath (panel.js), so a re-show is instantly current. This is
+    // the ONLY authority for hiding the score: unlike the bar, Off (and any
+    // other frozen/no-render path) never repaints, so a render-time branch on
+    // #eval — or on the 2nd-best/retro "(+0.2)" .line-eval annotations, which
+    // are part of "the evaluation score" too — would go stale the moment the
+    // panel stops rendering. This one class (see style.css) hides .eval-block
+    // (label + #eval, so the label doesn't float above blank space) AND every
+    // .line-eval span in one shot, declaratively, with no render involved.
+    if (evalCardEl) evalCardEl.classList.toggle('eval-score-hidden', !evalScoreVisible());
+    if (boardWrapEl) boardWrapEl.classList.toggle('eval-bar-hidden', !evalBarVisible());
+  };
+  syncEvalDisplay(); // apply the restored bucket before first paint
+  on('mode:change', syncEvalDisplay); // play-scope gate above depends on state.mode
+  if (evalScoreCheckEl) {
+    evalScoreCheckEl.addEventListener('change', () => {
+      evalDisplayPrefs[evalDisplayBucket()].score = evalScoreCheckEl.checked;
+      writeUiPref('evalDisplay', evalDisplayPrefs);
+      syncEvalDisplay(); // CSS hide is the sole authority for the score — sync it now
+      // (in Off, this CSS toggle is the ONLY effect this handler has on the
+      // number/annotations — refreshAnalysis() below early-returns without
+      // rendering while analysisMode === 'off', so the render-time `hideEval`
+      // belt-and-braces branch in panel.js never even runs).
+      if (state.mode === 'play' || state.mode === 'bot-play') {
+        // Never hit the live engine during review replay/trap practice; still
+        // re-render so the render-time `hideEval` branch (belt-and-braces —
+        // the CSS above is what actually guarantees the hide) stays in sync too.
+        analysisToken++;
+        refreshAnalysis();
+      }
+    });
+  }
+  if (evalBarCheckEl) {
+    evalBarCheckEl.addEventListener('change', () => {
+      evalDisplayPrefs[evalDisplayBucket()].bar = evalBarCheckEl.checked;
+      writeUiPref('evalDisplay', evalDisplayPrefs);
+      syncEvalDisplay();
+    });
+  }
+
   // Mode selector (replaces the old eval-toggle button; 'off' keeps its freeze
   // semantics). The header hint names a non-Full mode even while collapsed.
   const modeSegEl = byId('analysis-mode-seg');
   const modeHintEl = byId('analysis-mode-hint');
-  const hideEvalRowEl = byId('blunders-hide-eval-row');
-  const hideEvalCheckEl = byId('blunders-hide-eval');
   const MODE_HINTS = { blunders: '· Blunders only', off: '· Off' };
   const syncAnalysisMode = () => {
     if (modeSegEl) {
@@ -1562,27 +1672,13 @@ function init() {
       });
     }
     if (modeHintEl) modeHintEl.textContent = MODE_HINTS[analysisMode] || '';
-    // Hide-eval sub-setting: only visible/effective while mode === 'blunders'.
-    // Inline style, not the `hidden` attribute — .eval-bar-toggle-row's own
-    // `display: flex` out-specifies the UA [hidden] rule (same gotcha noted at
-    // style.css:306), and adding a `[hidden]` override lives outside this
-    // ticket's file scope (style.css isn't owned here).
-    if (hideEvalRowEl) hideEvalRowEl.style.display = analysisMode === 'blunders' ? '' : 'none';
-    if (hideEvalCheckEl) hideEvalCheckEl.checked = blundersHideEval;
+    syncEvalDisplay(); // mode switch swaps which bucket the checkboxes reflect
   };
   const setAnalysisMode = (mode) => {
     if (!VALID_ANALYSIS_MODES.includes(mode) || mode === analysisMode) return;
     analysisMode = mode;
     writeUiPref('analysisMode', mode);
-    // evalDisplaySuppressed tracks the hidden state across mode transitions:
-    // entering Blunders re-derives it from the hide-eval pref; entering Full
-    // clears it (nothing is ever suppressed in Full); entering Off leaves it
-    // UNCHANGED — that retention is what keeps the bar hidden instead of
-    // revealing the true (still-suppressed) eval on that transition.
-    if (mode === 'blunders') evalDisplaySuppressed = blundersHideEval;
-    else if (mode === 'full') evalDisplaySuppressed = false;
     syncAnalysisMode();
-    syncEvalBarHidden(); // mode change flips the forced-hidden state of the bar
     emit('analysis-mode:change', mode); // movelist re-renders its quality dots
     if (mode === 'off') {
       // Off → invalidate any in-flight refreshAnalysis so its late response can't
@@ -1603,54 +1699,6 @@ function init() {
     modeSegEl.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-mode]');
       if (btn) setAnalysisMode(btn.dataset.mode);
-    });
-  }
-  if (hideEvalCheckEl) {
-    hideEvalCheckEl.addEventListener('change', () => {
-      blundersHideEval = hideEvalCheckEl.checked;
-      writeUiPref('blundersHideEval', blundersHideEval);
-      evalDisplaySuppressed = blundersHideEval; // only reachable while mode === 'blunders'
-      syncEvalBarHidden();
-      if (state.mode === 'play' || state.mode === 'bot-play') {
-        // Same gate as setAnalysisMode — never hit the live engine during review replay.
-        analysisToken++;
-        refreshAnalysis();
-      }
-    });
-  }
-
-  // Win-chances bar show/hide. Pure CSS hide (class on .board-wrap) — setEvalBar
-  // keeps painting underneath so a re-show is instantly current. Blunders-only's
-  // "Hide evaluation score" sub-setting can also force the bar hidden (and stays
-  // forced through a transition to Off, via evalDisplaySuppressed — see above);
-  // when forced, the checkbox is disabled but its own evalBarHidden pref is never
-  // rewritten — leaving the forced state restores the user's saved choice.
-  const evalBarCheckEl = byId('eval-bar-visible');
-  const boardWrapEl = document.querySelector('.board-wrap');
-  let evalBarHidden = readUiPrefs().evalBarHidden === true;
-  const syncEvalBarHidden = () => {
-    // evalDisplaySuppressed carries the hidden state through the Off transition
-    // (see setAnalysisMode) — Off itself never sets suppressEval on a render, so
-    // without this the bar would reveal the true fill the moment Off is chosen.
-    const forced = (state.mode === 'play' || state.mode === 'bot-play')
-      && ((analysisMode === 'blunders' && blundersHideEval)
-          || (analysisMode === 'off' && evalDisplaySuppressed));
-    if (boardWrapEl) boardWrapEl.classList.toggle('eval-bar-hidden', evalBarHidden || forced);
-    if (evalBarCheckEl) {
-      evalBarCheckEl.checked = !(evalBarHidden || forced);
-      evalBarCheckEl.disabled = forced;
-      evalBarCheckEl.title = forced
-        ? 'Forced hidden by "Hide evaluation score" — untick it in Blunders only, or switch to Full'
-        : '';
-    }
-  };
-  syncEvalBarHidden(); // apply the restored pref before first paint
-  on('mode:change', syncEvalBarHidden); // mode gate above depends on state.mode
-  if (evalBarCheckEl) {
-    evalBarCheckEl.addEventListener('change', () => {
-      evalBarHidden = !evalBarCheckEl.checked;
-      writeUiPref('evalBarHidden', evalBarHidden);
-      syncEvalBarHidden();
     });
   }
 
