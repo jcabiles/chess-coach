@@ -1814,6 +1814,33 @@ body.trap-practice-mode #fen-error { display: none; }
   display: none;
 }
 
+/* Evaluation-score readout hidden: class set on .panel-eval-card by app.js
+   (syncEvalDisplay). display: none — removes the readout from assistive tech
+   AND collapses its reserved space (a 56px visibility:hidden gap at the top
+   of the card read as a rendering bug, not a deliberate hide), while the
+   render path (panel.js) keeps painting the true value underneath so a
+   re-show is instantly current. This is the ONLY authority for hiding the
+   score — there is no render-time branch for it, which is what keeps the
+   switch live through Off's freeze. Targets .eval-block (label + #eval), not
+   #eval alone, so the "Evaluation" label doesn't float above blank space
+   while its value is hidden. .eval-block (index.html) wraps only that label +
+   #eval and has no other CSS/JS consumer. */
+.panel-eval-card.eval-score-hidden .eval-block {
+  display: none;
+}
+
+/* Same switch, for the 2nd-best/retro "(+0.2)" score annotations — a separate
+   child span (see panel.js renderSecond) so it can be targeted independently
+   of the move text, which must stay visible even when the score is hidden.
+   display: none (not visibility) so "· or Qd5" doesn't leave a trailing gap.
+   A display:none child is still a DOM child, so panel.css's
+   `.best-second:empty { display: none }` (which only fires when renderSecond
+   clears textContent entirely, i.e. no line at all) is unaffected — verified
+   by reading that rule; :empty checks child-node presence, not computed style. */
+.panel-eval-card.eval-score-hidden .line-eval {
+  display: none;
+}
+
 /* "vs Bot" provenance badge (Game Library row, review.js) — reuses the
    .review-badge base (review.css) sizing/shape; a neutral (non-result)
    color modifier so it reads as provenance, not a win/loss/draw signal. */

@@ -217,11 +217,21 @@ function fmtLineEval(line) {
 }
 
 // Render a compact "· or Nf3 (+0.2)" 2nd-best entry into `el`; blank when absent.
-// `hideEval` (blunders-only "hide evaluation score") omits the "(+0.2)" annotation
-// — the move itself is coaching, the number is the leak.
+// The "(+0.2)" annotation lives in its own `.line-eval` child span so the
+// "Evaluation score" switch's CSS hide (.eval-score-hidden .line-eval, see
+// style.css) can target it independently of the move text — that CSS is what
+// actually hides it (a frozen, never-re-rendered panel — e.g. Off mode — still
+// hides it correctly, with no render involved). `hideEval` (the switch, off)
+// also blanks the span's text as belt-and-braces render-time suppression, but
+// is never the sole guarantee.
 function renderSecond(el, line, hideEval) {
   if (!el) return;
-  el.textContent = line && line.moveSan ? `· or ${line.moveSan}${hideEval ? '' : fmtLineEval(line)}` : '';
+  if (!(line && line.moveSan)) { el.textContent = ''; return; }
+  el.textContent = `· or ${line.moveSan}`;
+  const n = document.createElement('span');
+  n.className = 'line-eval';
+  n.textContent = hideEval ? '' : fmtLineEval(line);
+  el.appendChild(n);
 }
 
 // Render the retrospective block from a BestLine (+ optional 2nd). PV numbering
@@ -284,18 +294,21 @@ function clearDualBest() {
 // ---------------------------------------------------------------------------
 export function renderAnalysisPanel(a, opts = {}) {
   // --- Eval bar ---
-  // Always paint the true fill, even while suppressEval is set — the bar is a
-  // CSS-class hide (see app.js syncEvalBarHidden), never a fabricated value, so
-  // an un-hide is instantly correct. (A neutral-fill fallback here was tried and
-  // reverted: it made the bar visibly WRONG — not just hidden — across the Off
-  // transition and during the brief window before refreshAnalysis() repaints.)
+  // Always paint the true fill, even while the bar is hidden — it's a CSS-class
+  // hide (see app.js syncEvalDisplay), never a fabricated value, so an un-hide
+  // is instantly correct. (A neutral-fill fallback here was tried and reverted:
+  // it made the bar visibly WRONG — not just hidden — across the Off transition
+  // and during the brief window before refreshAnalysis() repaints.)
   setEvalBar(evalBarFill(a));
 
   // --- Eval text ---
-  // suppressEval (blunders-only "hide evaluation score") blanks the numeric
-  // readout; the win-chances bar stays hidden via the CSS class (see app.js).
+  // Always paint the true value — like the bar, #eval's visibility is a pure
+  // CSS-class hide driven by the "Evaluation score" switch (see app.js
+  // syncEvalDisplay), not a render-time branch. A render-time '—' here would go
+  // stale the moment the panel stops repainting (e.g. Off mode's freeze), which
+  // is exactly the inert-switch bug this design replaced.
   const evalEl = byId('eval');
-  if (evalEl) evalEl.textContent = opts.suppressEval ? '—' : formatEval(a);
+  if (evalEl) evalEl.textContent = formatEval(a);
 
   // --- Quality (color + icon + text) ---
   const qEl = byId('quality');
@@ -399,9 +412,10 @@ export function renderBookMovePanel(data) {
 // badge in the quality slot, and — when available — CARRIES OVER the last
 // own-move retrospective (`carriedRetro = { retroBest, retroSecond }`) so the
 // panel isn't blank about your play. `pvCursor` is the position index of that
-// prior own move (its own turn) for correct PV numbering. `hideEval` (blunders-only
-// "hide evaluation score") threads through to the carried retrospective's 2nd-best
-// line — a skipped opponent ply must not leak the score of a carried-over blunder.
+// prior own move (its own turn) for correct PV numbering. `hideEval` (the
+// "Evaluation score" switch, off) threads through to the carried retrospective's
+// 2nd-best line — a skipped opponent ply must not leak the score of a carried-over
+// blunder.
 // ---------------------------------------------------------------------------
 export function renderSkippedPanel(carriedRetro = null, pvCursor = -1, hideEval = false) {
   // Eval bar → neutral
