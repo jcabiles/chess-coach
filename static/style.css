@@ -385,11 +385,68 @@ main.bot-rail-open {
   flex-direction: column;
   gap: var(--space-2);
   flex: 0 0 auto;
-  align-self: start;
+  /* Stretch to the grid row (was align-self:start): the Moves card below the
+     buttons needs a definite remaining height to fill — a start-aligned column
+     is content-height, so its flex:1 child has nothing to grow into and long
+     games would be clipped by main{overflow:hidden} with no scrollbar. Buttons
+     keep their compact top-stack look; only the card consumes the slack. */
+  align-self: stretch;
+  min-height: 0;
   /* Left-align the caption + buttons so the capped-width buttons read as a
      compact tool rail under the BOARD caption, not full-width stretched bars. */
   align-items: flex-start;
   min-width: 0;
+}
+
+/* ---- Moves list card (relocated from the panel's eval card) ----
+   Every rule is scoped under .action-col .movelist-block: the .movelist-toggle /
+   .movelist-chevron classes are shared with the Play-vs-Bot and analysis-settings
+   disclosures in the panel, so the shared selectors in movelist.css must stay
+   untouched. Width is responsive (not a fixed 220px) so the rail-open grid at
+   1281–1440px doesn't crush the board — the board's own 100cqw width-guard
+   handles the rest. */
+.action-col .movelist-block {
+  align-self: stretch;
+  width: clamp(160px, 13vw, 220px);
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+/* Collapsed: header-only footprint — without this the collapsed card would keep
+   its flex:1 share and hold the column open as blank space. */
+.action-col .movelist-block.collapsed {
+  flex: 0 0 auto;
+}
+
+/* The list itself is the ONLY scroller: kill movelist.css's 18rem cap and let
+   the flex chain (stretch → min-height:0 → flex:1) hand it the real remaining
+   column height. */
+.action-col #move-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+
+/* Special modes (setup / trap / repertoire / blunder drill): the board area is
+   taken over by each mode's own bar and movelist.js renders nothing — hide the
+   card so no stale table lingers. Same body[data-mode] mechanism as the
+   tab-panel hide below. bot-play is deliberately absent: the list renders live
+   during bot games. */
+body[data-mode="setup"] .action-col .movelist-block,
+body[data-mode="trap-watch"] .action-col .movelist-block,
+body[data-mode="trap-practice"] .action-col .movelist-block,
+body[data-mode="rep-practice"] .action-col .movelist-block,
+body[data-mode="blunder-practice"] .action-col .movelist-block {
+  display: none;
 }
 
 /* Group caption — reuses the .eval-label idiom (uppercase, tracked, muted). */
@@ -2318,6 +2375,9 @@ body.rep-mode #fen-error { display: none; }
     flex-direction: row;
     flex-wrap: wrap;
     gap: var(--space-2);
+    /* Row-folded column is content-height again — the desktop stretch chain
+       must not force it to the (now vertical) grid row. */
+    align-self: auto;
   }
 
   .action-col-caption { display: none; }
@@ -2325,6 +2385,16 @@ body.rep-mode #fen-error { display: none; }
   .action-col button {
     width: auto;
     min-width: 0;
+  }
+
+  /* Moves card in the folded row: flex-basis:100% forces its own wrap line
+     BELOW the button row (flex-wrap alone would let it sit beside a button
+     when widths happen to fit), capped height with internal scroll. */
+  .action-col .movelist-block {
+    flex: 1 1 100%;
+    width: auto;
+    max-height: 12rem;
+    margin-top: 0;
   }
 
   .panel {

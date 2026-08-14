@@ -2,6 +2,7 @@
 
 stack:        python (FastAPI + python-chess backend; vanilla ES-module frontend, no build step)
 artifact_dir: docs/ai-dlc
+active:       movelist-relocation
 
 verify:
   test:  .venv/bin/python -m pytest -q
