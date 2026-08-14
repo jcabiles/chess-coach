@@ -72,10 +72,12 @@ function render() {
   const mount = byId('move-list');
   if (!mount || !_api) return;
   const state = _api.actions.getState();
-  // Render in play mode and review mode. In all other modes (setup/trap/rep)
-  // the movelist is hidden or irrelevant, so early-return.
-  // Refuter resolution #3: broadened from play-only to play|review.
-  if (state.mode && state.mode !== 'play' && state.mode !== 'review') return;
+  // Render in play, review, and bot-play. In the remaining modes
+  // (setup/trap/rep/trainer) the block is hidden via body[data-mode] CSS, so
+  // early-return. bot-play renders live (the bot mutates the same move
+  // history); clicking a cell there is a safe no-op — app.js goto() only acts
+  // in play/review.
+  if (state.mode && state.mode !== 'play' && state.mode !== 'review' && state.mode !== 'bot-play') return;
   const moves = state.moves || [];
   const quality = state.moveQuality || [];
   const cursor = state.cursor || 0;
@@ -123,8 +125,21 @@ function render() {
   mount.innerHTML = '';
   mount.appendChild(table);
 
+  // Keep the current move visible by scrolling #move-list ONLY. Never
+  // scrollIntoView here: it scrolls every scrollable ancestor, which used to
+  // drag the whole Analysis panel to its bottom on each move. Rect deltas
+  // (not offsetTop — the list has no positioned ancestor) give the cell's
+  // position inside the list's viewport regardless of page layout.
   const active = mount.querySelector('.movelist-move.is-current');
-  if (active) active.scrollIntoView({ block: 'nearest' });
+  if (active) {
+    const listRect = mount.getBoundingClientRect();
+    const cellRect = active.getBoundingClientRect();
+    if (cellRect.top < listRect.top) {
+      mount.scrollTop += cellRect.top - listRect.top;
+    } else if (cellRect.bottom > listRect.bottom) {
+      mount.scrollTop += cellRect.bottom - listRect.bottom;
+    }
+  }
 }
 
 export function initMovelist(api) {
