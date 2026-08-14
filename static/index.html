@@ -226,6 +226,16 @@
       <button id="flip" title="Flip board"><i data-lucide="flip-horizontal-2"></i> Flip</button>
       <button id="reset" title="Back to start"><i data-lucide="rotate-ccw"></i> Reset</button>
       <button id="setup-toggle" title="Set up a position freely"><i data-lucide="settings-2"></i> Set up position</button>
+
+      <!-- Moves list — relocated from the Analysis panel's eval card so its
+           follow-the-current-move scrolling can never drag the panel (the old
+           scrollIntoView-scrolls-every-ancestor bug). IDs unchanged; movelist.js
+           wiring is untouched. Visible on every tab while playing (like the
+           buttons above); hidden in special modes via body[data-mode]. -->
+      <div class="movelist-block">
+        <button id="movelist-toggle" class="movelist-toggle eval-label" aria-expanded="true" aria-controls="move-list">Moves <span class="movelist-chevron" aria-hidden="true"><i data-lucide="chevron-down"></i></span></button>
+        <div id="move-list" class="move-list"></div>
+      </div>
     </div>
 
     <aside class="panel">
@@ -290,10 +300,6 @@
             </div>
           </div>
 
-          <div class="movelist-block">
-            <button id="movelist-toggle" class="movelist-toggle eval-label" aria-expanded="true" aria-controls="move-list">Moves <span class="movelist-chevron" aria-hidden="true"><i data-lucide="chevron-down"></i></span></button>
-            <div id="move-list" class="move-list"></div>
-          </div>
         </div>
 
         <div id="status" class="status"></div>
