@@ -1,0 +1,2 @@
+{"gameId": "dev1", "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "ply": 14, "humanMoveUci": "e2e4", "band": "1300-1500", "eco": "B01", "timeControl": "600+0", "whiteElo": 1400, "blackElo": 1410, "dump": "fixture"}
+{"gameId": "dev2", "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1", "ply": 15, "humanMoveUci": "c7c5", "band": "1300-1500", "eco": "C50", "timeControl": "600+0", "whiteElo": 1420, "blackElo": 1390, "dump": "fixture"}

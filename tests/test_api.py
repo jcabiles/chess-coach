@@ -387,6 +387,56 @@ def test_move_analyze_omitted_still_analyzes(client):
     assert client.fake_engine.analyze_call_count >= 2
 
 
+def _play_sans(sans: list[str]) -> chess.Board:
+    b = chess.Board()
+    for san in sans:
+        b.push_san(san)
+    return b
+
+
+def test_move_trap_victim_not_book_falls_through_to_engine(client):
+    """Regression: a trap's victim-side (losing) move must NOT be swallowed by the
+    opening-book fast-path — it falls through to the engine so it gets a quality
+    label. Blackburne Shilling 7.Be2 (walks into 7...Nf3#) previously returned
+    book:true with no analysis. (Label value comes from the real engine; the fake's
+    even eval only lets us assert the move was analyzed, not that it's a blunder.)
+    """
+    b = _play_sans(["e4", "e5", "Nf3", "Nc6", "Bc4", "Nd4", "Nxe5",
+                    "Qg5", "Nxf7", "Qxg2", "Rf1", "Qxe4+"])
+    be2 = b.parse_san("Be2").uci()
+    calls_before = client.fake_engine.analyze_call_count
+    r = client.post(
+        "/api/move",
+        json={"fen": b.fen(), "move": be2, "useBook": True, "analyze": True},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["legal"] is True
+    assert not body["book"]                # no longer swallowed as book theory
+    assert body["analysis"] is not None    # engine ran → a quality label is present
+    assert body["analysis"]["quality"] in {
+        "best", "good", "inaccuracy", "mistake", "blunder"
+    }
+    assert client.fake_engine.analyze_call_count > calls_before  # engine was consulted
+
+
+def test_move_trap_lead_in_still_book(client):
+    """Positive control: the trap's lead-in setup move stays book (engine skipped),
+    so only the victim's losing moves were un-booked — not the whole line."""
+    b = _play_sans(["e4", "e5", "Nf3", "Nc6", "Bc4"])
+    nd4 = b.parse_san("Nd4").uci()
+    calls_before = client.fake_engine.analyze_call_count
+    r = client.post(
+        "/api/move",
+        json={"fen": b.fen(), "move": nd4, "useBook": True, "analyze": True},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["book"] is True
+    assert body["analysis"] is None
+    assert client.fake_engine.analyze_call_count == calls_before  # engine NOT consulted
+
+
 # ---------------------------------------------------------------------------
 # GET /api/games/{id}/review — summary field tests
 # ---------------------------------------------------------------------------
