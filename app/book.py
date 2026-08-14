@@ -116,6 +116,7 @@ def load(
     config_path: Optional[str] = None,
     lines: Iterable[Iterable[str]] = (),
     trap_ucis: Iterable[Iterable[str]] = (),
+    blocklist_epds: Iterable[str] = (),
 ) -> BookIndex:
     """Build the module-level book index from the config + supplied lines.
 
@@ -127,6 +128,11 @@ def load(
             config's ``firstMoves``.
         trap_ucis: Trap mainlines as FULL UCI lines from the start (e.g.
             ``app.traps.iter_mainline_ucis()``). Included when ``includeTraps``.
+        blocklist_epds: EPDs to REMOVE from the finished book, regardless of which
+            source seeded them (e.g. ``app.traps.iter_victim_epds()`` — the losing
+            side of each trap). Subtracted LAST so a trap blunder that a sound
+            opening-DB line transposes into is still un-booked; those moves then fall
+            through to the engine in ``/api/move`` and get a real quality label.
 
     Returns:
         The populated (or empty) :class:`BookIndex`. Import-safe and graceful: a
@@ -137,8 +143,9 @@ def load(
 
     lines_list = [tuple(line) for line in lines]
     traps_list = [tuple(t) for t in trap_ucis]
+    blocklist = frozenset(blocklist_epds)
     resolved_cfg = str(config_path if config_path is not None else os.environ.get("BOOK_FILE", "data/book.json"))
-    sig = (resolved_cfg, len(lines_list), len(traps_list), hash(tuple(lines_list)), hash(tuple(traps_list)))
+    sig = (resolved_cfg, len(lines_list), len(traps_list), hash(tuple(lines_list)), hash(tuple(traps_list)), hash(blocklist))
     if sig == _cache_sig and not _index.empty:
         return _index
 
@@ -186,11 +193,20 @@ def load(
             book_epds.update(epds)
             n_extra += 1
 
+    # 4. Subtract the blocklist LAST — remove blunder positions (e.g. trap
+    # victim-side moves) no matter which source above seeded them, so the book
+    # fast-path can't swallow them without a quality label.
+    n_blocked = 0
+    if blocklist:
+        before = len(book_epds)
+        book_epds -= set(blocklist)
+        n_blocked = before - len(book_epds)
+
     _index = BookIndex(book_epds=book_epds)
     _cache_sig = sig
     logger.info(
-        "book: %d positions (db lines=%d, trap lines=%d, extra=%d)",
-        len(book_epds), n_db, n_trap, n_extra,
+        "book: %d positions (db lines=%d, trap lines=%d, extra=%d, blocked=%d)",
+        len(book_epds), n_db, n_trap, n_extra, n_blocked,
     )
     return _index
 
@@ -199,9 +215,10 @@ def init(
     config_path: Optional[str] = None,
     lines: Iterable[Iterable[str]] = (),
     trap_ucis: Iterable[Iterable[str]] = (),
+    blocklist_epds: Iterable[str] = (),
 ) -> None:
     """Convenience wrapper — call load() at app startup."""
-    load(config_path, lines, trap_ucis)
+    load(config_path, lines, trap_ucis, blocklist_epds)
 
 
 def is_book_move(fen: str, uci: str) -> bool:
