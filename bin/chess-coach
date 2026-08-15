@@ -1,8 +1,23 @@
 #!/usr/bin/env bash
-# Global entry point for this project's dev server, exposed on PATH via
-# direnv's `PATH_add bin` in .envrc (see README: one-time `direnv allow`).
-# Thin delegate to scripts/serve.sh — a bare call defaults to "start";
-# any explicit subcommand (stop/restart/status) is forwarded as-is.
+# Entry point for this project's dev server. Works whether it is found via
+# direnv's `PATH_add bin` (.envrc) inside the checkout, via a symlink in
+# ~/.local/bin, or run directly — it resolves its own real path first, so the
+# caller's working directory never matters.
+#
+# Thin delegate to scripts/serve.sh: a bare call means "start"; every
+# subcommand (stop/restart/status) is forwarded as-is.
 set -euo pipefail
-HERE="$(cd "$(dirname "$0")" && pwd)"
-exec "$HERE/../scripts/serve.sh" "${1:-start}"
+
+# Resolve this script's real location, following symlinks.
+SRC="${BASH_SOURCE[0]}"
+while [ -h "$SRC" ]; do
+  DIR="$(cd -P "$(dirname "$SRC")" && pwd)"
+  SRC="$(readlink "$SRC")"
+  [ "${SRC#/}" = "$SRC" ] && SRC="$DIR/$SRC"   # relative symlink → make absolute
+done
+HERE="$(cd -P "$(dirname "$SRC")" && pwd)"
+
+if [ $# -eq 0 ]; then
+  exec "$HERE/../scripts/serve.sh" start
+fi
+exec "$HERE/../scripts/serve.sh" "$@"
