@@ -80,7 +80,13 @@ Commit only after a change is **implemented, verified, and reviewed** — never 
 **Format:** Conventional Commits subject (`feat:`, `fix:`, `refactor:`, `docs:`,
 `test:`, `chore:`); imperative, ≤ 50 chars; body explains *why* when non-obvious.
 End every message with:
-`Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+`Co-Authored-By: Claude <noreply@anthropic.com>`
+
+The attribution names no model version on purpose. A pinned version is correct
+only until the next model ships, and after that it silently misattributes every
+commit written under it — nothing in the workflow prompts anyone to update the
+line. Where a model version genuinely matters, it is a fact about the code (see
+`NARRATIVE_MODEL` in `app/narrative.py`), not about who wrote the commit.
 
 **Before creating any new branch:** `git fetch origin` then `git status -sb`
 (or `git log main..origin/main`) to confirm local `main` matches `origin/main`.
