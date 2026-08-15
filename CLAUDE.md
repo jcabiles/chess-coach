@@ -28,8 +28,13 @@ brew install stockfish                 # engine binary (or set STOCKFISH_PATH)
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt        # if truststore error: add --cert "$(python3 -m certifi)"
 
-# Run (8001 because 8000 is often taken by other local apps)
-uvicorn app.main:app --reload --port 8001     # → http://localhost:8001
+# Run in the background (8001 because 8000 is often taken by other local apps).
+# Survives closing the terminal; returns only once the server answers.
+chess-coach start | stop | restart | status   # → http://localhost:8001
+scripts/serve.sh start                        # same thing, without direnv
+
+# Run in the foreground with auto-reload (dies with its terminal)
+uvicorn app.main:app --reload --port 8001
 
 # Test
 pytest                                  # full suite

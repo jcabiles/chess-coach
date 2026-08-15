@@ -126,6 +126,16 @@ per-move coaching notes.
    ```
    Open <http://localhost:8001>.
 
+   > `chess-coach start` **keeps running after you close the terminal**, and it
+   > returns only once the server actually answers — startup takes a few
+   > seconds here. Stopping is a deliberate `chess-coach stop`. It writes
+   > `.server.pid` and `.server.log` in the repo root, both gitignored, and the
+   > log rolls to `.server.log.1` on each start. To use the command from any
+   > directory rather than only inside this checkout:
+   > `ln -s "$PWD/bin/chess-coach" ~/.local/bin/chess-coach`. The raw `uvicorn`
+   > line above is the opposite — it runs in the foreground and dies with its
+   > terminal.
+
    > Port **8001** is the default here because **8000** (uvicorn's own default)
    > is commonly taken by other local apps. Override with `PORT=8123
    > chess-coach` (or `--port 8123` for the raw `uvicorn` command). Run two

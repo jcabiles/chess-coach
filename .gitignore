@@ -24,9 +24,11 @@ board-debug.png
 layout-check.png
 setup-mode.png
 
-# Local dev-server runtime (managed by scripts/serve.sh)
-.server.pid
-.server.log
+# Local dev-server runtime (managed by scripts/serve.sh). Globbed to cover the
+# rotated .server.log.1 and any instance started with a PIDFILE/LOGFILE override.
+.server*.pid
+.server*.log
+.server*.log.*
 
 # Game-review feature: user data (never commit), but keep the drop-folder
 data/games.db
