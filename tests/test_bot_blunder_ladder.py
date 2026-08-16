@@ -38,10 +38,20 @@ _PHASE = "middlegame"
 # Fixed, deterministic seed range for the empirical miss-rate estimate.
 _SEEDS = range(200)
 
-# The real ladder, ordered lowest→highest Elo (Casey/Diego/Robin @1350 ->
-# Morgan -> Alex -> Vera). A stable sort keeps insertion order within the
-# 1350 elo group, so ties resolve to catalog order (casey, diego, robin).
-_LADDER = sorted(personas.all(), key=lambda p: p.elo)
+# The real SF-backed ladder, ordered lowest→highest Elo (Casey/Diego/Robin
+# @1350 -> Morgan -> Alex -> Vera). A stable sort keeps insertion order within
+# the 1350 elo group, so ties resolve to catalog order (casey, diego, robin).
+# M6's Maia-backed personas are EXCLUDED here: their blunderRate is extra
+# injection on top of a net that already carries human error — a different
+# scale, asserted separately below at Maia-group granularity.
+_LADDER = sorted(
+    (p for p in personas.all() if p.maiaBand is None), key=lambda p: p.elo
+)
+
+# The Maia-backed M6 grid (800–1800, two styles per rung), same ordering rule.
+_MAIA_LADDER = sorted(
+    (p for p in personas.all() if p.maiaBand is not None), key=lambda p: p.elo
+)
 
 
 def _miss_rate(persona) -> float:
@@ -54,10 +64,33 @@ def _miss_rate(persona) -> float:
 
 
 def test_ladder_is_the_expected_six_personas_by_elo():
-    # Sanity: the real ladder is Casey/Diego/Robin(1350) < Morgan(1550) <
+    # Sanity: the SF-backed ladder is Casey/Diego/Robin(1350) < Morgan(1550) <
     # Alex(1800) < Vera(2000), ties broken by catalog (insertion) order.
     ids = [p.id for p in _LADDER]
     assert ids == ["casey", "diego", "robin", "morgan", "alex", "vera"]
+
+
+def test_maia_ladder_is_the_expected_twelve_personas_by_elo():
+    ids = [p.id for p in _MAIA_LADDER]
+    assert ids == [
+        "teddy", "rosie", "marco", "june", "kofi", "sana",
+        "lena", "harold", "dmitri", "wren", "yuki", "grant",
+    ]
+
+
+def test_maia_ladder_injection_miss_rate_monotone():
+    """Maia rungs: worst-case empirical injected-miss-rate per elo group is
+    NON-increasing as the label climbs (non-strict — 1600/1800 are all-zero,
+    the net alone carries the error there)."""
+    groups: dict[int, list[float]] = {}
+    for p in _MAIA_LADDER:
+        groups.setdefault(p.elo, []).append(_miss_rate(p))
+    elos = sorted(groups)
+    group_max = [max(groups[elo]) for elo in elos]
+    assert group_max == sorted(group_max, reverse=True)
+    # Not degenerate: the 800 rung really injects, the 1800 rung really doesn't.
+    assert group_max[0] > 0.0
+    assert group_max[-1] == 0.0
 
 
 def test_miss_rate_monotone_non_increasing_across_ladder():

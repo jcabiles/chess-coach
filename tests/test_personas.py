@@ -25,6 +25,14 @@ def reset_after():
 
 MISSING = "tests/fixtures/does_not_exist_personas.json"
 
+#: The full built-in ladder, in catalog order: the six SF-backed originals,
+#: then the twelve M6 Maia-backed personas (800–1800, two per rung).
+DEFAULT_IDS = [
+    "casey", "diego", "robin", "morgan", "alex", "vera",
+    "teddy", "rosie", "marco", "june", "kofi", "sana",
+    "lena", "harold", "dmitri", "wren", "yuki", "grant",
+]
+
 
 def _write(tmp_path, obj):
     p = tmp_path / "personas.json"
@@ -49,7 +57,7 @@ def test_default_ladder_present_without_init():
     # all() works before any explicit init in this test — proves the default is
     # set at import with no file I/O.
     ids = [p.id for p in personas.all()]
-    assert ids == ["casey", "diego", "robin", "morgan", "alex", "vera"]
+    assert ids == DEFAULT_IDS
 
 
 def test_default_id_and_casey_elo():
@@ -77,29 +85,60 @@ def test_default_persona_shape():
 # --------------------------------------------------------------------------- #
 
 
+def _by_elo(ladder):
+    groups: dict[int, list] = {}
+    for p in ladder:
+        groups.setdefault(p.elo, []).append(p)
+    return groups
+
+
 def test_default_ladder_blunder_dials_present_and_monotone():
-    # Three personas now share elo=1350 (casey, diego, robin), so a strictly-
-    # decreasing / globally-unique blunderRate assertion no longer holds
-    # (diego == casey == 0.85; robin == 0.18 undercuts morgan's 0.65 at 1550,
-    # so a MIN-per-group check would be non-monotone). Instead: group by elo
-    # and assert the MAX blunderRate per elo group is strictly decreasing
-    # across strictly-increasing elo groups. Equal-elo personas (e.g. diego's
-    # 0.85 == casey's 0.85) may repeat a blunderRate WITHIN a group — that is
-    # not asserted unique here, only the max-per-group step-down is.
+    # The monotonicity invariant is scoped PER BACKEND (M6): an SF persona's
+    # blunderRate is its whole error model, while a Maia persona's dials are
+    # extra injection on top of a net that already carries human error — the
+    # two scales are not comparable, so they are asserted separately.
+    #
+    # SF-backed (B9 lesson, unchanged): three personas share elo=1350, so
+    # only the MAX blunderRate per elo group must STRICTLY step down across
+    # strictly-increasing elo groups (min-per-group is non-monotone by
+    # design — robin's 0.18 undercuts morgan's 0.65).
     ladder = personas.all()
     for p in ladder:
         assert 0.0 <= p.blunderRate <= 1.0
         assert 0.0 <= p.threatDistance <= 1.0
 
-    by_elo: dict[int, list] = {}
-    for p in ladder:
-        by_elo.setdefault(p.elo, []).append(p)
-
+    sf = [p for p in ladder if p.maiaBand is None]
+    by_elo = _by_elo(sf)
     elos = sorted(by_elo)
-    assert elos == sorted(set(elos))  # strictly increasing group keys (elo values unique)
     max_blunder_per_group = [max(p.blunderRate for p in by_elo[elo]) for elo in elos]
     assert max_blunder_per_group == sorted(max_blunder_per_group, reverse=True)
     assert len(set(max_blunder_per_group)) == len(max_blunder_per_group)  # strict step-down
+
+
+def test_default_maia_ladder_injection_dials_monotone():
+    # Maia-backed rungs: injection must fade as the label climbs — max
+    # blunderRate and max mistakeRate per elo rung NON-increasing (1600/1800
+    # are all-zero, so non-strict), and min threatDistance NON-decreasing.
+    maia = [p for p in personas.all() if p.maiaBand is not None]
+    assert maia, "expected Maia-backed personas in the default ladder"
+    by_elo = _by_elo(maia)
+    elos = sorted(by_elo)
+    assert elos == [800, 1000, 1200, 1400, 1600, 1800]
+    for elo in elos:
+        assert len(by_elo[elo]) == 2  # two contrasting styles per rung
+
+    max_blunder = [max(p.blunderRate for p in by_elo[e]) for e in elos]
+    max_mistake = [max(p.mistakeRate for p in by_elo[e]) for e in elos]
+    min_threat = [min(p.threatDistance for p in by_elo[e]) for e in elos]
+    assert max_blunder == sorted(max_blunder, reverse=True)
+    assert max_mistake == sorted(max_mistake, reverse=True)
+    assert min_threat == sorted(min_threat)
+    # The band itself must be non-decreasing with the label and a real net.
+    for e in elos:
+        for p in by_elo[e]:
+            assert p.maiaBand in range(1100, 2000, 100)
+    bands = [by_elo[e][0].maiaBand for e in elos]
+    assert bands == sorted(bands)
 
 
 def test_blunder_dials_derived_from_elo_when_absent(tmp_path):
@@ -142,7 +181,7 @@ def test_blunder_rate_out_of_range_keeps_defaults(tmp_path):
     ]
     path = _write(tmp_path, {"personas": ladder})
     personas.init(path)
-    assert len(personas.all()) == 6  # defaults kept
+    assert len(personas.all()) == len(DEFAULT_IDS)  # defaults kept
 
 
 def test_threat_distance_out_of_range_keeps_defaults(tmp_path):
@@ -152,7 +191,7 @@ def test_threat_distance_out_of_range_keeps_defaults(tmp_path):
     ]
     path = _write(tmp_path, {"personas": ladder})
     personas.init(path)
-    assert len(personas.all()) == 6  # defaults kept
+    assert len(personas.all()) == len(DEFAULT_IDS)  # defaults kept
 
 
 # --------------------------------------------------------------------------- #
@@ -192,7 +231,7 @@ def test_mistake_rate_out_of_range_keeps_defaults(tmp_path):
     ]
     path = _write(tmp_path, {"personas": ladder})
     personas.init(path)
-    assert len(personas.all()) == 6  # defaults kept
+    assert len(personas.all()) == len(DEFAULT_IDS)  # defaults kept
 
 
 def test_mistake_rate_negative_keeps_defaults(tmp_path):
@@ -202,7 +241,7 @@ def test_mistake_rate_negative_keeps_defaults(tmp_path):
     ]
     path = _write(tmp_path, {"personas": ladder})
     personas.init(path)
-    assert len(personas.all()) == 6  # defaults kept
+    assert len(personas.all()) == len(DEFAULT_IDS)  # defaults kept
 
 
 def test_existing_four_personas_mistake_rate_zero():
@@ -285,7 +324,7 @@ def test_temperature_derived_from_style_when_absent(tmp_path):
 
 def test_missing_file_keeps_defaults():
     personas.init(MISSING)
-    assert [p.id for p in personas.all()] == ["casey", "diego", "robin", "morgan", "alex", "vera"]
+    assert [p.id for p in personas.all()] == DEFAULT_IDS
 
 
 def test_env_override(tmp_path, monkeypatch):
@@ -302,14 +341,14 @@ def test_malformed_json_keeps_defaults(tmp_path, obj):
     p = tmp_path / "personas.json"
     p.write_text(obj, encoding="utf-8")
     personas.init(str(p))
-    assert [x.id for x in personas.all()] == ["casey", "diego", "robin", "morgan", "alex", "vera"]
+    assert [x.id for x in personas.all()] == DEFAULT_IDS
 
 
 def test_duplicate_ids_keep_defaults(tmp_path):
     dup = VALID_LADDER + [dict(VALID_LADDER[0])]
     path = _write(tmp_path, {"personas": dup})
     personas.init(path)
-    assert len(personas.all()) == 6  # defaults
+    assert len(personas.all()) == len(DEFAULT_IDS)  # defaults
 
 
 def test_missing_casey_keeps_defaults(tmp_path):
@@ -317,27 +356,84 @@ def test_missing_casey_keeps_defaults(tmp_path):
     path = _write(tmp_path, {"personas": ladder})
     personas.init(path)
     assert personas.default_id() == "casey"
-    assert [p.id for p in personas.all()] == ["casey", "diego", "robin", "morgan", "alex", "vera"]
+    assert [p.id for p in personas.all()] == DEFAULT_IDS
 
 
 def test_elo_out_of_range_keeps_defaults(tmp_path):
     ladder = [dict(VALID_LADDER[0], elo=1000), dict(VALID_LADDER[1])]
     path = _write(tmp_path, {"personas": ladder})
     personas.init(path)
-    assert len(personas.all()) == 6
+    assert len(personas.all()) == len(DEFAULT_IDS)
 
 
 def test_temp_non_positive_keeps_defaults(tmp_path):
     ladder = [dict(VALID_LADDER[0], temperature=0), dict(VALID_LADDER[1])]
     path = _write(tmp_path, {"personas": ladder})
     personas.init(path)
-    assert len(personas.all()) == 6
+    assert len(personas.all()) == len(DEFAULT_IDS)
 
 
 def test_empty_ladder_keeps_defaults(tmp_path):
     path = _write(tmp_path, {"personas": []})
     personas.init(path)
-    assert len(personas.all()) == 6
+    assert len(personas.all()) == len(DEFAULT_IDS)
+
+
+# --------------------------------------------------------------------------- #
+# maiaBand (M6 roster)
+# --------------------------------------------------------------------------- #
+
+
+def test_maia_band_none_by_default(tmp_path):
+    # Old-style JSON without maiaBand parses to None (SF semantics unchanged).
+    path = _write(tmp_path, {"personas": VALID_LADDER})
+    personas.init(path)
+    assert personas.get("casey").maiaBand is None
+
+
+def test_maia_band_allows_sub_floor_elo(tmp_path):
+    ladder = VALID_LADDER + [
+        {"id": "teddy", "name": "Teddy", "elo": 800, "style": "wild",
+         "description": "d", "temperature": 200, "maiaBand": 1100},
+    ]
+    path = _write(tmp_path, {"personas": ladder})
+    personas.init(path)
+    teddy = personas.get("teddy")
+    assert teddy is not None and teddy.elo == 800 and teddy.maiaBand == 1100
+
+
+def test_sub_floor_elo_without_maia_band_keeps_defaults(tmp_path):
+    # elo 800 with NO maiaBand is a real (invalid) UCI_Elo → whole file rejected.
+    ladder = VALID_LADDER + [
+        {"id": "teddy", "name": "Teddy", "elo": 800, "style": "wild",
+         "description": "d", "temperature": 200},
+    ]
+    path = _write(tmp_path, {"personas": ladder})
+    personas.init(path)
+    assert len(personas.all()) == len(DEFAULT_IDS)
+
+
+def test_unpublished_maia_band_keeps_defaults(tmp_path):
+    # Only the nine published nets (1100–1900 by 100) are valid bands.
+    ladder = VALID_LADDER + [
+        {"id": "teddy", "name": "Teddy", "elo": 800, "style": "wild",
+         "description": "d", "temperature": 200, "maiaBand": 1000},
+    ]
+    path = _write(tmp_path, {"personas": ladder})
+    personas.init(path)
+    assert len(personas.all()) == len(DEFAULT_IDS)
+
+
+def test_new_roster_spot_values():
+    teddy = personas.get("teddy")
+    assert teddy.elo == 800 and teddy.maiaBand == 1100
+    assert teddy.mistakeRate == pytest.approx(0.40)
+    grant = personas.get("grant")
+    assert grant.elo == 1800 and grant.maiaBand == 1800
+    assert grant.blunderRate == 0.0 and grant.mistakeRate == 0.0
+    # SF originals untouched (B4/B9 parity).
+    assert personas.get("vera").maiaBand is None
+    assert personas.get("casey").maiaBand is None
 
 
 # --------------------------------------------------------------------------- #

@@ -215,10 +215,16 @@ def test_bot_status_available_true(monkeypatch):
     body = resp.json()
     assert body["available"] is True
     assert body["personaLabel"] == BOT_PERSONA_LABEL
+    # Per-persona readiness covers casey (legacy MAIA_NETS) plus the twelve
+    # M6 maiaBand personas — all not-ready under conftest's _maia_off fixture.
+    maia_ids = [
+        "casey", "teddy", "rosie", "marco", "june", "kofi", "sana",
+        "lena", "harold", "dmitri", "wren", "yuki", "grant",
+    ]
     assert body["maia"] == {
         "lc0": False,
         "weights": [],
-        "personas": {"casey": False},
+        "personas": {pid: False for pid in maia_ids},
     }
 
 
@@ -247,9 +253,14 @@ def test_bot_status_maia_shape(monkeypatch):
     assert set(maia) == {"lc0", "weights", "personas"}
     assert isinstance(maia["lc0"], bool)
     assert isinstance(maia["weights"], list)
-    # Per-persona readiness (Maia skeleton): conftest's _maia_off fixture
-    # points MAIA_WEIGHTS_DIR at an empty dir, so casey reads not-ready here.
-    assert maia["personas"] == {"casey": False}
+    # Per-persona readiness: conftest's _maia_off fixture points
+    # MAIA_WEIGHTS_DIR at an empty dir, so every Maia-wired persona (casey +
+    # the twelve maiaBand personas) reads not-ready here.
+    assert set(maia["personas"]) == {
+        "casey", "teddy", "rosie", "marco", "june", "kofi", "sana",
+        "lena", "harold", "dmitri", "wren", "yuki", "grant",
+    }
+    assert all(v is False for v in maia["personas"].values())
 
 
 # --- Maia-first branch (Maia skeleton) --------------------------------------

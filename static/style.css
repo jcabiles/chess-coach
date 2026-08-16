@@ -813,6 +813,27 @@ body.setup-mode #fen-error { display: none; }
   flex: 1;
 }
 
+/* Rung heading between card groups (18-bot roster, grouped by rating).
+   Sticky so the current group's rating stays visible while its cards
+   scroll (design-review fold); the surface background stops card bleed. */
+.bot-rail-rung {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-panel);
+  padding: var(--space-2) var(--space-1) var(--space-1);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.bot-rail-rung:first-child {
+  padding-top: 0;
+}
+
 /* ---- Persona card ---- */
 .bot-card {
   display: flex;
@@ -2318,6 +2339,13 @@ body.rep-mode #fen-error { display: none; }
        rule (line ~158) zeroes this duration — movement collapses to an instant
        appear with the scrim fade, feedback preserved. */
     animation: bot-rail-slide-in var(--motion-base) var(--ease-out);
+  }
+
+  /* Overlay sheet: the close button is the primary touch dismissal — grow
+     its hit area to 44px (design-review fold; glyph stays 16px). */
+  .bot-rail-close {
+    width: 44px;
+    height: 44px;
   }
 
   /* Full-viewport scrim behind the sheet. A ::before can't catch clicks, so
