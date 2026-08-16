@@ -433,17 +433,7 @@ function reflectControls() {
   renderClocks();
 }
 
-// --- collapse toggle + color radiogroup ------------------------------------
-
-function wireToggle() {
-  const block = byId('botplay-block');
-  const toggle = byId('botplay-toggle');
-  if (!block || !toggle) return;
-  toggle.addEventListener('click', () => {
-    const collapsed = block.classList.toggle('collapsed');
-    toggle.setAttribute('aria-expanded', String(!collapsed));
-  });
-}
+// --- color radiogroup ------------------------------------------------------
 
 function chosenColor() {
   const white = byId('botplay-color-white');
@@ -1293,11 +1283,67 @@ function reflectPillAvatar() {
   img.src = `/avatars/${id}.png`;
 }
 
-// Render the rail interior from the already-fetched catalog. Header ("Bots" +
-// close × + lock hint), then one card per persona. Idempotent — safe to call
-// again after catalog load.
+// --- two-step screens (roster → pregame) ------------------------------------
+//
+// The rail holds two screens: #bot-rail-roster (card list, screen 1) and
+// #bot-rail-pregame (relocated settings + Start / in-game controls, screen 2).
+// Selecting a card advances to pregame; ← All bots returns. While a game is
+// live, opening the rail lands directly on the pregame screen (clocks/resign).
+
+function showRosterScreen() {
+  const roster = byId('bot-rail-roster');
+  const pre = byId('bot-rail-pregame');
+  if (!roster || !pre) return;
+  roster.hidden = false;
+  pre.hidden = true;
+}
+
+// Fill the pregame hero (avatar + rating) for the currently chosen persona.
+// Name + blurb are already maintained by setPersonaName/setPersonaCaption.
+// Missing photo → initials fallback, same treatment as the roster cards.
+function updatePregameHero() {
+  const id = chosenPersonaId();
+  const p = personaCatalog.find((x) => x.id === id);
+  const img = byId('pregame-avatar-img');
+  const initials = byId('pregame-avatar-initials');
+  if (img && id) {
+    img.hidden = false;
+    if (initials) initials.hidden = true;
+    img.onerror = () => {
+      img.hidden = true;
+      if (initials) {
+        initials.textContent = personaInitials(p ? p.name : '');
+        initials.hidden = false;
+      }
+    };
+    img.src = `/avatars/${id}.png`;
+  }
+  const rating = byId('pregame-rating');
+  if (rating) rating.textContent = p ? ratingLabel(p) : '';
+}
+
+function showPregameScreen() {
+  const roster = byId('bot-rail-roster');
+  const pre = byId('bot-rail-pregame');
+  if (!roster || !pre) return;
+  updatePregameHero();
+  roster.hidden = true;
+  pre.hidden = false;
+}
+
+// Static pregame-screen nav (← All bots + its own ×) — wired once at init.
+function wirePregameNav() {
+  const back = byId('bot-rail-back');
+  if (back) back.addEventListener('click', showRosterScreen);
+  const close = byId('bot-rail-close-pregame');
+  if (close) close.addEventListener('click', closeRail);
+}
+
+// Render the roster screen's interior from the already-fetched catalog. Header
+// ("Choose opponent" + close × + lock hint), then one card per persona.
+// Idempotent — safe to call again after catalog load.
 function renderRail() {
-  const rail = byId('bot-rail');
+  const rail = byId('bot-rail-roster');
   if (!rail) return;
   rail.innerHTML = '';
   if (personaCatalog.length === 0) return;
@@ -1306,7 +1352,7 @@ function renderRail() {
   header.className = 'bot-rail-header';
   const title = document.createElement('span');
   title.className = 'bot-rail-title';
-  title.textContent = 'Bots';
+  title.textContent = 'Choose opponent';
   const close = document.createElement('button');
   close.id = 'bot-rail-close';
   close.type = 'button';
@@ -1366,7 +1412,11 @@ function renderRail() {
       if (avatarBtn.dataset.hasPhoto === 'true') openLightbox(p);
       return;
     }
+    // Two-step flow: pick the bot, then land on its pregame screen. When
+    // selection is locked (live game) the pick no-ops but the pregame screen
+    // still shows — that's where the live game's controls are.
     selectPersonaFromRail(p.id);
+    showPregameScreen();
   });
   list.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -1374,6 +1424,9 @@ function renderRail() {
     if (!card || e.target.closest('.bot-card-avatar')) return;
     e.preventDefault();
     selectPersonaFromRail(card.dataset.personaId);
+    showPregameScreen();
+    const back = byId('bot-rail-back');
+    if (back) back.focus();
   });
 
   reflectRailSelection();
@@ -1426,9 +1479,9 @@ function onRailPointerDown(e) {
   // it as a backdrop dismiss, or the pointerdown-close + click-reopen would
   // double-toggle and leave the sheet open.
   if (e.target.closest('#bot-rail-toggle')) return;
-  const sheetContent = e.target.closest(
-    '.bot-rail-header, .bot-rail-list, .bot-rail-lock-hint'
-  );
+  // Both screens count as sheet content; the scrim (::before) registers as
+  // #bot-rail itself, which matches neither container.
+  const sheetContent = e.target.closest('#bot-rail-roster, #bot-rail-pregame');
   if (!sheetContent) closeRail();
 }
 
@@ -1455,16 +1508,24 @@ function applyRailVisible(visible) {
 }
 
 function openRail() {
+  // Screen choice: a live game opens straight onto the pregame screen (that's
+  // where its clocks/resign/takeback live); otherwise start at the roster.
+  const game = hub().botGetGame();
+  const live = state().mode === 'bot-play' && game && !game.result;
+  if (live) showPregameScreen(); else showRosterScreen();
+
   applyRailVisible(true);
   writeUiPref('botRailVisible', true);
-  // Move focus into the sheet so keyboard + SR users land inside it. The close
-  // button is the first stop; guard for the not-yet-rendered rail.
-  const close = byId('bot-rail-close');
-  if (close) close.focus();
+  // Move focus into the sheet so keyboard + SR users land inside it. First
+  // stop is the visible screen's leading control; guard for not-yet-rendered.
+  const focusTarget = live ? byId('bot-rail-back') : byId('bot-rail-close');
+  if (focusTarget) focusTarget.focus();
   // With 18 cards the selected bot usually sits below the fold — bring it
   // into view so the accent state is visible on open (design-review find).
-  const selected = document.querySelector('.bot-card.is-selected');
-  if (selected) selected.scrollIntoView({ block: 'center' });
+  if (!live) {
+    const selected = document.querySelector('.bot-card.is-selected');
+    if (selected) selected.scrollIntoView({ block: 'center' });
+  }
 }
 
 function closeRail() {
@@ -1494,7 +1555,6 @@ function wireRailToggle() {
 export function initBotplay(api) {
   _api = api;
 
-  wireToggle();
   wireColorPicker();
   wirePersonaPicker();
   wireTakebackPolicy();
@@ -1502,6 +1562,7 @@ export function initBotplay(api) {
   wireChessComInput();
   startClockLoop();
   wireRailToggle();
+  wirePregameNav();
   wireLightbox();
 
   byId('botplay-start').addEventListener('click', startGame);
@@ -1520,6 +1581,11 @@ export function initBotplay(api) {
   // visibility so it opens on boot only once cards exist.
   probeStatus().finally(() => {
     renderRail();
+    // Boot-restore lands on the right screen: a restored live game opens onto
+    // its in-game controls, otherwise the roster.
+    const game = hub().botGetGame();
+    const live = state().mode === 'bot-play' && game && !game.result;
+    if (live) showPregameScreen(); else showRosterScreen();
     applyRailVisible(readUiPrefs().botRailVisible === true);
     resumeIfPending();
     void refreshRating();

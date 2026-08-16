@@ -311,92 +311,8 @@
           <button id="trap-chip-dismiss" class="trap-chip-dismiss" title="Dismiss" aria-label="Dismiss"><i data-lucide="x"></i></button>
         </div>
 
-        <!-- Play vs Bot — relocated from the board column into the panel below
-             the instrument card (spec item 6). Collapsible disclosure; every id
-             is preserved so botplay.js wiring is untouched. -->
-        <div id="botplay-block" class="botplay-block collapsed">
-          <button id="botplay-toggle" class="movelist-toggle eval-label" aria-expanded="false" aria-controls="botplay-body">
-            <span>Play vs Bot</span>
-            <span class="movelist-chevron" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
-          </button>
-          <div id="botplay-body" class="botplay-body">
-            <div class="botplay-persona-row">
-              <span id="botplay-persona" class="botplay-persona">Casual sparring bot</span>
-              <span id="botplay-maia-indicator" class="botplay-maia-indicator" title="Maia (human-style) engine — serves Maia-wired bots' moves when installed; falls back to Stockfish if unavailable">
-                <span class="botplay-maia-dot" aria-hidden="true"></span>
-                <span id="botplay-maia-label">Maia: checking…</span>
-              </span>
-            </div>
-
-            <div class="botplay-color-row">
-              <span class="eval-label" id="botplay-color-label">Play as</span>
-              <div id="botplay-color-seg" class="botplay-color-seg analysis-mode-seg" role="radiogroup" aria-labelledby="botplay-color-label">
-                <button type="button" id="botplay-color-white" data-color="white" role="radio" aria-checked="true">White</button>
-                <button type="button" id="botplay-color-black" data-color="black" role="radio" aria-checked="false">Black</button>
-              </div>
-            </div>
-
-            <div class="botplay-persona-picker-row">
-              <label class="eval-label" for="bot-persona">Opponent</label>
-              <select id="bot-persona" class="botplay-persona-select" aria-label="Choose a bot opponent">
-                <option value="">Loading…</option>
-              </select>
-            </div>
-            <div id="botplay-persona-caption" class="botplay-hint botplay-persona-caption"></div>
-
-            <label class="botplay-rated-row eval-bar-toggle-row">
-              <span class="eval-label">Rated</span>
-              <input type="checkbox" id="bot-rated">
-            </label>
-            <div class="botplay-hint botplay-rated-hint">Rated games count toward your ELO; quitting a rated game is a loss.</div>
-
-            <div class="botplay-takeback-policy-row">
-              <label class="eval-label" for="bot-takeback-policy">Takebacks</label>
-              <select id="bot-takeback-policy" class="botplay-persona-select" aria-label="Takeback policy">
-                <option value="never">Never</option>
-                <option value="three" selected>Up to 3</option>
-                <option value="anytime">Anytime</option>
-              </select>
-            </div>
-
-            <div class="botplay-time-control-row">
-              <label class="eval-label" for="bot-time-control">Time control</label>
-              <select id="bot-time-control" class="botplay-persona-select" aria-label="Time control">
-                <option value="untimed" selected>Untimed</option>
-                <option value="5+2">5+2</option>
-                <option value="10+0">10+0</option>
-                <option value="10+5">10+5</option>
-              </select>
-            </div>
-            <div class="botplay-hint botplay-clock-hint">Clocks pause on reload — time spent away isn't charged.</div>
-
-            <div class="botplay-clocks">
-              <span id="bot-clock-top" class="botplay-clock" aria-label="Opponent clock" hidden>00:00</span>
-              <span id="bot-clock-bottom" class="botplay-clock" aria-label="Your clock" hidden>00:00</span>
-            </div>
-
-            <div class="botplay-rating-row">
-              <div id="botplay-elo" class="botplay-elo">Bot rating: — (0 games)</div>
-              <span id="botplay-chesscom" class="botplay-chesscom" hidden></span>
-            </div>
-            <div class="botplay-chesscom-input-row">
-              <label class="eval-label" for="chesscom-rating">Your chess.com rating</label>
-              <input type="number" id="chesscom-rating" class="botplay-chesscom-input" min="0" step="1" placeholder="e.g. 1500">
-            </div>
-
-            <div id="botplay-status" class="botplay-status" aria-live="polite"></div>
-
-            <div class="botplay-controls">
-              <button id="botplay-start" class="botplay-start" type="button">Start</button>
-              <button id="botplay-resign" class="botplay-resign" type="button" hidden>Resign</button>
-              <button id="botplay-retry" class="botplay-retry" type="button" hidden>Retry</button>
-              <button id="botplay-takeback" class="botplay-takeback" type="button" hidden>Take back</button>
-              <span id="botplay-takeback-count" class="botplay-takeback-count"></span>
-            </div>
-            <div id="botplay-takeback-note" class="botplay-hint botplay-takeback-note" hidden>Takeback used — this game no longer counts toward your rating.</div>
-            <div id="botplay-hint" class="botplay-hint" hidden></div>
-          </div>
-        </div>
+        <!-- Play vs Bot controls now live in the bot rail's pregame screen
+             (#bot-rail-pregame) — one place for roster + settings + Start. -->
 
         <!-- Utility cluster: engine status/restart, evaluate-color, speed, and
              the analysis-mode disclosure — the panel seams. Kept working but
@@ -524,9 +440,113 @@
       </button>
     </aside>
 
-    <!-- Bot rail — hidden-by-default mount point; becomes the 5th grid track
-         when <main> gains .bot-rail-open. T5 builds the card list + wiring. -->
-    <aside id="bot-rail" hidden></aside>
+    <!-- Bot rail — two-screen flow: roster (screen 1, card list rendered by
+         botplay.js into #bot-rail-roster) → pregame/in-game (screen 2, the
+         relocated bot controls; every id preserved so botplay.js wiring is
+         untouched). Becomes the 5th grid track when <main> gains
+         .bot-rail-open; overlay sheet ≤1280px. -->
+    <aside id="bot-rail" hidden>
+      <!-- Screen 1: roster — header + card list built by renderRail(). -->
+      <div id="bot-rail-roster" class="bot-rail-roster"></div>
+
+      <!-- Screen 2: pregame (settings + Start) and, once a game is live,
+           in-game controls (clocks, resign, takebacks). -->
+      <div id="bot-rail-pregame" class="bot-rail-pregame" hidden>
+        <div class="bot-rail-header">
+          <button id="bot-rail-back" type="button" class="bot-rail-back">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+            All bots
+          </button>
+          <button id="bot-rail-close-pregame" type="button" class="bot-rail-close" aria-label="Close bot panel">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <div class="bot-rail-pregame-scroll">
+          <div class="pregame-hero">
+            <span class="pregame-avatar"><img id="pregame-avatar-img" src="" alt=""><span id="pregame-avatar-initials" class="pregame-avatar-initials" aria-hidden="true" hidden></span></span>
+            <span id="botplay-persona" class="botplay-persona">Casual sparring bot</span>
+            <span id="pregame-rating" class="pregame-rating"></span>
+            <div id="botplay-persona-caption" class="botplay-hint botplay-persona-caption"></div>
+            <span id="botplay-maia-indicator" class="botplay-maia-indicator" title="Maia (human-style) engine — serves Maia-wired bots' moves when installed; falls back to Stockfish if unavailable">
+              <span class="botplay-maia-dot" aria-hidden="true"></span>
+              <span id="botplay-maia-label">Maia: checking…</span>
+            </span>
+          </div>
+
+          <!-- Hidden state-carrier: the roster cards drive this select (value +
+               change) so every downstream — prefs, caption, lock — keeps its
+               existing wiring. Not user-facing anymore. -->
+          <select id="bot-persona" class="botplay-persona-select" hidden aria-hidden="true" tabindex="-1">
+            <option value="">Loading…</option>
+          </select>
+
+          <div id="botplay-block" class="botplay-block">
+            <div id="botplay-body" class="botplay-body">
+            <div class="botplay-color-row">
+              <span class="eval-label" id="botplay-color-label">Play as</span>
+              <div id="botplay-color-seg" class="botplay-color-seg analysis-mode-seg" role="radiogroup" aria-labelledby="botplay-color-label">
+                <button type="button" id="botplay-color-white" data-color="white" role="radio" aria-checked="true">White</button>
+                <button type="button" id="botplay-color-black" data-color="black" role="radio" aria-checked="false">Black</button>
+              </div>
+            </div>
+
+            <label class="botplay-rated-row eval-bar-toggle-row">
+              <span class="eval-label">Rated</span>
+              <input type="checkbox" id="bot-rated">
+            </label>
+            <div class="botplay-hint botplay-rated-hint">Rated games count toward your ELO; quitting a rated game is a loss.</div>
+
+            <div class="botplay-takeback-policy-row">
+              <label class="eval-label" for="bot-takeback-policy">Takebacks</label>
+              <select id="bot-takeback-policy" class="botplay-persona-select" aria-label="Takeback policy">
+                <option value="never">Never</option>
+                <option value="three" selected>Up to 3</option>
+                <option value="anytime">Anytime</option>
+              </select>
+            </div>
+
+            <div class="botplay-time-control-row">
+              <label class="eval-label" for="bot-time-control">Time control</label>
+              <select id="bot-time-control" class="botplay-persona-select" aria-label="Time control">
+                <option value="untimed" selected>Untimed</option>
+                <option value="5+2">5+2</option>
+                <option value="10+0">10+0</option>
+                <option value="10+5">10+5</option>
+              </select>
+            </div>
+            <div class="botplay-hint botplay-clock-hint">Clocks pause on reload — time spent away isn't charged.</div>
+
+            <div class="botplay-clocks">
+              <span id="bot-clock-top" class="botplay-clock" aria-label="Opponent clock" hidden>00:00</span>
+              <span id="bot-clock-bottom" class="botplay-clock" aria-label="Your clock" hidden>00:00</span>
+            </div>
+
+            <div class="botplay-rating-row">
+              <div id="botplay-elo" class="botplay-elo">Bot rating: — (0 games)</div>
+              <span id="botplay-chesscom" class="botplay-chesscom" hidden></span>
+            </div>
+            <div class="botplay-chesscom-input-row">
+              <label class="eval-label" for="chesscom-rating">Your chess.com rating</label>
+              <input type="number" id="chesscom-rating" class="botplay-chesscom-input" min="0" step="1" placeholder="e.g. 1500">
+            </div>
+
+            <div id="botplay-status" class="botplay-status" aria-live="polite"></div>
+
+            <div class="botplay-controls">
+              <button id="botplay-start" class="botplay-start" type="button">Start</button>
+              <button id="botplay-resign" class="botplay-resign" type="button" hidden>Resign</button>
+              <button id="botplay-retry" class="botplay-retry" type="button" hidden>Retry</button>
+              <button id="botplay-takeback" class="botplay-takeback" type="button" hidden>Take back</button>
+              <span id="botplay-takeback-count" class="botplay-takeback-count"></span>
+            </div>
+            <div id="botplay-takeback-note" class="botplay-hint botplay-takeback-note" hidden>Takeback used — this game no longer counts toward your rating.</div>
+            <div id="botplay-hint" class="botplay-hint" hidden></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
   </main>
 
   <!-- Toasts container (fixed, top-right) -->
