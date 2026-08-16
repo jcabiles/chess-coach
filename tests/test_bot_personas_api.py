@@ -73,17 +73,21 @@ def client():
 # --- /api/bot/status: persona ladder ----------------------------------------
 
 
-def test_status_lists_six_personas_and_default(client):
+def test_status_lists_full_ladder_and_default(client):
     resp = client.get("/api/bot/status")
     assert resp.status_code == 200
     body = resp.json()
     assert body["defaultPersonaId"] == "casey"
     ids = [p["id"] for p in body["personas"]]
-    assert ids == ["casey", "diego", "robin", "morgan", "alex", "vera"]
+    assert ids == [
+        "casey", "diego", "robin", "morgan", "alex", "vera",
+        "teddy", "rosie", "marco", "june", "kofi", "sana",
+        "lena", "harold", "dmitri", "wren", "yuki", "grant",
+    ]
     # personaLabel stays back-compat = the default persona's name.
     assert body["personaLabel"] == "Ming Ling"
     # Each persona dict carries the full shape (B5 added blunderRate +
-    # threatDistance + mistakeRate — additive causal-blunder dials).
+    # threatDistance + mistakeRate; M6 added maiaBand).
     for p in body["personas"]:
         assert set(p) == {
             "id",
@@ -95,6 +99,7 @@ def test_status_lists_six_personas_and_default(client):
             "blunderRate",
             "threatDistance",
             "mistakeRate",
+            "maiaBand",
         }
     casey = next(p for p in body["personas"] if p["id"] == "casey")
     assert casey["elo"] == 1350

@@ -67,6 +67,7 @@ from app.maia_engine import (
     get_maia_engine,
     maia_ready_for,
     pick_from_priors,
+    policy_sharpness,
 )
 from app.models import (
     Analysis,
@@ -621,6 +622,16 @@ CAND_K = 5
 MISTAKE_K = 5
 assert MISTAKE_K == CAND_K == SAMPLE_K
 
+#: Stockfish's UCI_Elo floor (B1 §1). Maia-backed personas may carry a display
+#: ``elo`` below this (an 800-labeled bot); every ``candidates()`` call clamps
+#: up to it so the engine never sees an out-of-range UCI_Elo.
+SF_ELO_FLOOR = 1320
+
+
+def _sf_elo(persona: personas.Persona) -> int:
+    """The UCI_Elo actually sent to the bot Stockfish for this persona."""
+    return max(SF_ELO_FLOOR, persona.elo)
+
 
 class BotMoveRequest(BaseModel):
     """Body for ``POST /api/bot/move`` — the position the bot must move in.
@@ -650,8 +661,11 @@ class BotMoveResponse(BaseModel):
     fen: str = Field(description="Position AFTER the bot's move, in FEN.")
     engine: Literal["maia", "stockfish"] = Field(
         default="stockfish",
-        description="Which engine produced this move: 'maia' (human-trained "
-        "lc0 net) or 'stockfish' (weakened SF, incl. same-request fallback).",
+        description="Which move PIPELINE served this move: 'maia' (the "
+        "persona's human-trained lc0 net is healthy — includes the M6 "
+        "roster's occasional injected error plies, which are chosen from SF "
+        "candidates by design) or 'stockfish' (the weakened-SF pipeline, "
+        "incl. same-request fallback after any lc0 failure).",
     )
 
 
@@ -679,6 +693,72 @@ class BotStatusResponse(BaseModel):
 # override it via ``app.dependency_overrides[get_bot_engine]`` per the spec.
 
 
+async def _maia_injected_uci(
+    bot: BotEngine,
+    persona: personas.Persona,
+    board: chess.Board,
+    fen: str,
+    ply: int,
+    seed: int,
+    recent_moves: list[str],
+) -> Optional[str]:
+    """M6 error injection for a Maia-backed persona's ply — the layer that
+    drags a sub-band label (800/1000 on maia-1100) below the net's strength.
+
+    Runs the SAME pure gates as the SF pipeline (causal-blunder first, then
+    the mistake tier — never both in one ply) over Stockfish candidates at the
+    persona's CLAMPED elo. Returns the injected uci, or ``None`` meaning
+    "keep the Maia move" — which is also the failure mode: injection is
+    optional garnish, so an SF hiccup (``BotEngineUnavailable``) never breaks
+    a ply that Maia already answered.
+
+    ``pick_mistake``'s degenerate returns (index 0: forced mate, short list,
+    no in-band candidate) map to ``None`` — substituting SF's best move for
+    Maia's human move would sharpen play, the opposite of a mistake tier.
+
+    Mirrors the SF pipeline's tier routing (Sol review fold): a fired
+    blunder gate with NO survivor falls through to the mistake tier, reusing
+    the already-fetched candidate set (CAND_K == MISTAKE_K) — one SF call
+    per ply, and a ply still blunders OR mistakes, never both.
+    """
+    if persona.blunderRate <= 0 and persona.mistakeRate <= 0:
+        return None
+
+    plan = bot_blunder.plan_attention_set(recent_moves, board)
+    if board.is_check():
+        threat = None  # a bot in check must respond — no plausible "miss"
+    else:
+        nb = board.copy()
+        nb.push(chess.Move.null())
+        threat = bot_blunder.opponent_threat(nb)
+    phase = analysis.game_phase(board)
+
+    # Catch EVERYTHING engine-side (not just BotEngineUnavailable): a valid
+    # Maia move is already in hand, and no injection failure may turn it
+    # into a 500 (Sol review fold — e.g. a raw OSError from a dying pipe).
+    try:
+        cands = None
+        if bool(threat) and bot_blunder.should_blunder(
+            persona, phase, ply, seed, threat, plan
+        ):
+            cands = await bot.candidates(fen, k=CAND_K, elo=_sf_elo(persona))
+            survivor = bot_blunder.pick_survivor(cands, board, threat)
+            if survivor is not None:
+                return cands[survivor]["uci"]
+        if persona.mistakeRate and bot_blunder.should_mistake(
+            persona, phase, ply, seed
+        ):
+            if cands is None:
+                cands = await bot.candidates(fen, k=MISTAKE_K, elo=_sf_elo(persona))
+            if cands:
+                idx = bot_blunder.pick_mistake(cands, board, seed, ply)
+                if idx > 0:
+                    return cands[idx]["uci"]
+    except Exception:
+        return None
+    return None
+
+
 async def select_persona_move(
     bot: BotEngine,
     persona: personas.Persona,
@@ -694,12 +774,15 @@ async def select_persona_move(
     no copy-paste divergence. The route and ``tools/realism_audit.py`` both
     call this; a fakes-based parity test pins them together.
 
-    Order (unchanged from B4/B5/B9/M1/M2): Maia-first for wired personas
-    (seeded policy sample, same-request SF fallback on MaiaUnavailable) →
-    causal-blunder gate (fires ⇒ wider CAND_K + pick_survivor) → opening
-    sampling (ply < OPENING_PLIES) → mistake tier → best move. Only ONE
-    ``candidates()`` call happens per move (gate-fetched CAND_K sets are
-    reused — CAND_K == SAMPLE_K == MISTAKE_K).
+    Order: Maia-first for wired personas (seeded policy sample — M6
+    maiaBand personas add temperature-derived sharpness and may substitute
+    an injected blunder/mistake ply via ``_maia_injected_uci``; same-request
+    SF fallback on MaiaUnavailable) → causal-blunder gate (fires ⇒ wider
+    CAND_K + pick_survivor) → opening sampling (ply < OPENING_PLIES) →
+    mistake tier → best move. At most ONE ``candidates()`` call happens per
+    move on either pipeline (gate-fetched CAND_K sets are reused —
+    CAND_K == SAMPLE_K == MISTAKE_K; the pure-Maia path makes zero).
+    Legacy MAIA_NETS personas keep the M1/M2 pure-sample semantics exactly.
 
     Returns ``{"uci": str, "engine": "maia"|"stockfish"}``, or ``None`` when
     the engine yielded no usable candidate (route maps that to 503).
@@ -711,10 +794,14 @@ async def select_persona_move(
     board = chess.Board(fen)
 
     # Maia-first: a Maia-wired persona plays a seeded sample from the
-    # human-trained net's policy — the SF pipeline below (gate / sampling /
-    # mistake) does NOT run for it (Maia already encodes human error;
-    # layering synthetic weakness on top double-applies). ANY Maia failure
-    # falls through to the ENTIRE Stockfish block in the same request.
+    # human-trained net's policy. Legacy MAIA_NETS personas (casey, M1/M2
+    # semantics) get the pure sample — no injection, no sharpness. M6
+    # maiaBand personas additionally get (a) a temperature-derived sampling
+    # sharpness (style contrast within a rung) and (b) the causal-blunder +
+    # mistake tiers layered ON TOP as injection — that is what drags an
+    # 800/1000 label below maia-1100's band; at 1600/1800 the dials are zero
+    # and the net plays clean. ANY Maia failure falls through to the ENTIRE
+    # Stockfish block in the same request.
     if maia_ready_for(persona.id):
         try:
             maia_result = await get_maia_engine().top_move(fen, persona.id)
@@ -724,13 +811,31 @@ async def select_persona_move(
             # unparseable, or illegal — yields the engine-guaranteed-legal
             # argmax, still engine="maia".
             chosen_uci = maia_result["uci"]
-            sampled = pick_from_priors(maia_result["priors"], hash((seed, ply)))
+            # M6 semantics (sharpness + injection) apply ONLY to maiaBand
+            # personas that are NOT legacy-map wired: MAIA_NETS membership is
+            # the legacy discriminator (Sol review fold), so a catalog edit
+            # giving casey a maiaBand cannot silently change casey's shipped
+            # M1/M2 behavior while the legacy map still owns its net.
+            is_m6 = persona.maiaBand is not None and persona.id not in MAIA_NETS
+            sharpness = policy_sharpness(persona.temperature) if is_m6 else 1.0
+            sampled = pick_from_priors(
+                maia_result["priors"], hash((seed, ply)), sharpness
+            )
             if sampled is not None:
                 try:
                     if chess.Move.from_uci(sampled) in board.legal_moves:
                         chosen_uci = sampled
                 except ValueError:
                     pass  # malformed uci from a fake/parser edge
+            if is_m6:
+                injected = await _maia_injected_uci(
+                    bot, persona, board, fen, ply, seed, recent_moves
+                )
+                if injected is not None:
+                    chosen_uci = injected
+            # engine="maia" even for an injected ply: the persona's Maia
+            # pipeline is healthy — the indicator's "engine fallback" state
+            # is reserved for lc0 actually failing.
             return {"uci": chosen_uci, "engine": "maia"}
         except MaiaUnavailable:
             pass  # same-request fallback: weakened-SF path below
@@ -763,7 +868,7 @@ async def select_persona_move(
     blundered = False
     cands = None
     if gate_fired:
-        cands = await bot.candidates(fen, k=CAND_K, elo=persona.elo)
+        cands = await bot.candidates(fen, k=CAND_K, elo=_sf_elo(persona))
         survivor = bot_blunder.pick_survivor(cands, board, threat)
         if survivor is not None:
             idx = survivor  # play the causal blunder, skip the B4 path
@@ -775,7 +880,7 @@ async def select_persona_move(
         # Opening phase: sample among SAMPLE_K candidates for mild variety.
         # Reuse the gate's CAND_K set if present (CAND_K == SAMPLE_K).
         if cands is None:
-            cands = await bot.candidates(fen, k=SAMPLE_K, elo=persona.elo)
+            cands = await bot.candidates(fen, k=SAMPLE_K, elo=_sf_elo(persona))
         if cands:
             mover = board.turn
             # Convert White-POV scoreCp to MOVER-POV before sampling — a
@@ -793,13 +898,13 @@ async def select_persona_move(
         # already ran FIRST and short-circuited above (a persona move
         # blunders OR mistakes, never both). Reuse the gate's CAND_K set if
         # it fetched one; else one MISTAKE_K (==CAND_K) call.
-        cands = cands or await bot.candidates(fen, k=MISTAKE_K, elo=persona.elo)
+        cands = cands or await bot.candidates(fen, k=MISTAKE_K, elo=_sf_elo(persona))
         idx = bot_blunder.pick_mistake(cands, board, seed, ply)
     else:
         # Post-opening: play the best move (candidate 0), still at strength.
         # Reuse the gate's CAND_K set if present (cands[0] is best-first).
         if cands is None:
-            cands = await bot.candidates(fen, k=1, elo=persona.elo)
+            cands = await bot.candidates(fen, k=1, elo=_sf_elo(persona))
 
     if not cands:
         return None
@@ -916,7 +1021,14 @@ async def bot_status():
         defaultPersonaId=personas.default_id(),
         maia={
             **detect_maia(),
-            "personas": {pid: maia_ready_for(pid) for pid in MAIA_NETS},
+            # Every Maia-wired persona: the legacy MAIA_NETS map (M1) plus the
+            # M6 maiaBand roster — the rail's per-persona readiness dot.
+            "personas": {
+                pid: maia_ready_for(pid)
+                for pid in dict.fromkeys(
+                    [*MAIA_NETS, *(p.id for p in personas.all() if p.maiaBand)]
+                )
+            },
         },
     )
 

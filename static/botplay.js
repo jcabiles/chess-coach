@@ -502,6 +502,20 @@ function personaNameFor(id) {
 // Build the <option> list from the status catalog and select the persisted
 // persona (readUiPrefs().botPersona) or the server default. Called from the
 // status-probe path once personas are known.
+// Rating label for display. Sub-1100 ratings are calibrated ESTIMATES — the
+// Maia nets floor at 1100, so the 800/1000 rungs are dragged down via error
+// injection and honestly labeled "est." (roadmap M5 decision).
+function ratingLabel(p) {
+  return p.elo < 1100 ? `≈${p.elo} est.` : `≈${p.elo}`;
+}
+
+// Catalog sorted weakest→strongest for display (rail + picker). A stable
+// copy — `personaCatalog` keeps server order for id lookups; ties keep
+// catalog order so equal-elo styles stay in their authored sequence.
+function sortedCatalog() {
+  return [...personaCatalog].sort((a, b) => a.elo - b.elo);
+}
+
 function populatePersonaPicker(personas, defId) {
   personaCatalog = Array.isArray(personas) ? personas : [];
   defaultPersonaId = defId || '';
@@ -515,10 +529,12 @@ function populatePersonaPicker(personas, defId) {
     : (personaCatalog.some((p) => p.id === defaultPersonaId) ? defaultPersonaId : personaCatalog[0].id);
 
   sel.innerHTML = '';
-  for (const p of personaCatalog) {
+  for (const p of sortedCatalog()) {
     const opt = document.createElement('option');
     opt.value = p.id;
-    opt.textContent = `${p.name} (≈${p.elo}) — ${p.description}`;
+    // Name + rating only: 18 blurbed options hard-clip in the 258px closed
+    // select (design-review find); the caption + rail card carry the blurb.
+    opt.textContent = `${p.name} (${ratingLabel(p)})`;
     sel.appendChild(opt);
   }
   sel.value = wanted;
@@ -636,8 +652,12 @@ let maiaPersonas = {};
 let lastBotEngine = null;
 
 // Subtle engine indicator (Maia skeleton): for a Maia-wired persona the line
-// reads ready → active → engine fallback as the game progresses; for everyone
-// else it keeps the original global readiness text.
+// reads ready → active → engine fallback as the game progresses. A persona
+// PRESENT in the readiness map but not ready (its net file is missing) gets
+// an explicit "net missing" state — with 13 Maia-wired bots, the old global
+// some-net-is-ready text would falsely show "ready" for a bot that will
+// actually play Stockfish (Opus review find). Personas outside the map keep
+// the original global readiness text.
 function updateMaiaLine() {
   const indicator = byId('botplay-maia-indicator');
   const maiaLabel = byId('botplay-maia-label');
@@ -651,6 +671,9 @@ function updateMaiaLine() {
     if (lastBotEngine === 'maia') text = 'Maia: active';
     else if (lastBotEngine === 'stockfish') text = 'Maia: engine fallback';
     else text = 'Maia: ready';
+  } else if (pid in maiaPersonas) {
+    ready = false;
+    text = 'Maia: net missing — plays Stockfish';
   } else {
     ready = Object.values(maiaPersonas).some(Boolean);
     text = ready ? 'Maia: ready' : 'Maia: not installed';
@@ -1151,7 +1174,7 @@ function buildCard(p) {
   card.dataset.personaId = p.id;
   card.setAttribute('role', 'button');
   card.setAttribute('tabindex', '0');
-  card.setAttribute('aria-label', `Play ${p.name}, rated ${p.elo}`);
+  card.setAttribute('aria-label', `Play ${p.name}, rated ${ratingLabel(p)}`);
 
   const avatar = document.createElement('button');
   avatar.type = 'button';
@@ -1184,7 +1207,7 @@ function buildCard(p) {
 
   const rating = document.createElement('div');
   rating.className = 'bot-card-rating';
-  rating.textContent = `≈${p.elo}`;
+  rating.textContent = ratingLabel(p);
 
   const blurb = document.createElement('div');
   blurb.className = 'bot-card-blurb';
@@ -1223,7 +1246,7 @@ function openLightbox(p) {
   if (!dlg || !img || !cap) return;
   img.src = `/avatars/${p.id}.png`;
   img.alt = `${p.name}'s portrait`;
-  cap.textContent = `${p.name} · ${p.elo}`;
+  cap.textContent = `${p.name} · ${ratingLabel(p)}`;
   if (typeof dlg.showModal === 'function' && !dlg.open) dlg.showModal();
 }
 
@@ -1289,7 +1312,13 @@ function renderRail() {
   close.type = 'button';
   close.className = 'bot-rail-close';
   close.setAttribute('aria-label', 'Close bot rail');
-  close.innerHTML = '<i data-lucide="x" aria-hidden="true"></i>';
+  // Inline SVG × — NOT a lucide placeholder: the page's lucide loader is an
+  // ES module (no window.lucide), so the old `<i data-lucide="x">` here was
+  // never icon-ified and rendered as an empty 28px box (design-review find).
+  close.innerHTML =
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+    'aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
   header.appendChild(title);
   header.appendChild(close);
 
@@ -1299,9 +1328,21 @@ function renderRail() {
   hint.textContent = 'Finish or resign to switch';
   hint.hidden = true;
 
+  // Cards grouped by rung: sorted weakest→strongest with a small heading at
+  // every elo change — 18 bots stay scannable (M6 rail-UX fold).
   const list = document.createElement('div');
   list.className = 'bot-rail-list';
-  for (const p of personaCatalog) list.appendChild(buildCard(p));
+  let lastElo = null;
+  for (const p of sortedCatalog()) {
+    if (p.elo !== lastElo) {
+      const rung = document.createElement('div');
+      rung.className = 'bot-rail-rung';
+      rung.textContent = ratingLabel(p);
+      list.appendChild(rung);
+      lastElo = p.elo;
+    }
+    list.appendChild(buildCard(p));
+  }
 
   rail.appendChild(header);
   rail.appendChild(hint);
@@ -1334,11 +1375,6 @@ function renderRail() {
     e.preventDefault();
     selectPersonaFromRail(card.dataset.personaId);
   });
-
-  // Icon-ify the freshly inserted lucide placeholders (× glyphs).
-  if (window.lucide && typeof window.lucide.createIcons === 'function') {
-    window.lucide.createIcons();
-  }
 
   reflectRailSelection();
   reflectPillAvatar();
@@ -1425,6 +1461,10 @@ function openRail() {
   // button is the first stop; guard for the not-yet-rendered rail.
   const close = byId('bot-rail-close');
   if (close) close.focus();
+  // With 18 cards the selected bot usually sits below the fold — bring it
+  // into view so the accent state is visible on open (design-review find).
+  const selected = document.querySelector('.bot-card.is-selected');
+  if (selected) selected.scrollIntoView({ block: 'center' });
 }
 
 function closeRail() {

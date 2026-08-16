@@ -73,8 +73,10 @@ MAIA_ENGINE_OPTIONS: dict = {
     "PolicyTemperature": 1.0,
 }
 
-#: Persona id -> required Maia net filename. The skeleton wires exactly one
-#: persona; the ladder-switch slice extends this map.
+#: Persona id -> required Maia net filename — the LEGACY (M1 skeleton) wiring.
+#: Personas in this map keep the skeleton semantics (pure policy sample, no
+#: injection tiers). The M6 roster instead declares ``maiaBand`` on the persona
+#: itself; ``_net_path_for`` consults this map first, then the catalog.
 MAIA_NETS: dict = {
     "casey": "maia-1400.pb.gz",
 }
@@ -110,11 +112,22 @@ def _weights_dir() -> Path:
 
 
 def _net_path_for(persona_id: str) -> Optional[Path]:
-    """Absolute path of the persona's required net, or None if unmapped."""
+    """Absolute path of the persona's required net, or None if unmapped.
+
+    Resolution order: the legacy ``MAIA_NETS`` map (M1 skeleton wiring), then
+    the persona catalog's ``maiaBand`` (M6 roster — ``maia-<band>.pb.gz``).
+    Import is deferred to the call to keep this module import-light; personas
+    is pure (no engine, no cycle).
+    """
     name = MAIA_NETS.get(persona_id)
-    if name is None:
+    if name is not None:
+        return _weights_dir() / name
+    from app import personas as _personas
+
+    p = _personas.get(persona_id)
+    if p is None or p.maiaBand is None:
         return None
-    return _weights_dir() / name
+    return _weights_dir() / f"maia-{p.maiaBand}.pb.gz"
 
 
 def maia_ready_for(persona_id: str) -> bool:
@@ -168,13 +181,45 @@ def parse_movestats(lines: List[str]) -> List[dict]:
 MAIA_MIN_PRIOR: float = 0.02
 
 
-def pick_from_priors(priors: List[dict], seed) -> Optional[str]:
+#: Bounds for the per-persona policy-sampling exponent (M6 style contrast).
+_SHARPNESS_MIN = 0.5
+_SHARPNESS_MAX = 2.5
+#: The temperature (cp) that maps to a neutral exponent of 1.0.
+_SHARPNESS_PIVOT_TEMP = 120.0
+
+
+def policy_sharpness(temperature: float) -> float:
+    """Map a persona's cp ``temperature`` to a policy-sampling exponent. Pure.
+
+    ``sharpness = 120 / temperature`` clamped to [0.5, 2.5]: a cool persona
+    (temp 80 → 1.5) concentrates on the net's top choices (solid/precise
+    texture); a hot one (temp 200 → 0.6) flattens toward the tail
+    (adventurous texture). 120 → exactly 1.0 = the M2 behavior. Non-finite or
+    non-positive input degrades to 1.0 (never raises).
+    """
+    try:
+        t = float(temperature)
+    except (TypeError, ValueError):
+        return 1.0
+    if not math.isfinite(t) or t <= 0:
+        return 1.0
+    return max(_SHARPNESS_MIN, min(_SHARPNESS_MAX, _SHARPNESS_PIVOT_TEMP / t))
+
+
+def pick_from_priors(priors: List[dict], seed, sharpness: float = 1.0) -> Optional[str]:
     """Seeded sample from a Maia policy distribution (M2 variety). Pure.
 
     Candidate set = entries with ``p >= MAIA_MIN_PRIOR`` plus the argmax
     (``priors[0]`` after ``parse_movestats``'s descending STABLE sort — equal
     p keeps parse order, which is what makes ties deterministic); weights are
     renormalized and one uci is drawn via ``random.Random(seed)``.
+
+    ``sharpness`` (M6 style contrast) exponentiates the sampling WEIGHTS —
+    ``w_i = p_i ** sharpness`` — while pool ELIGIBILITY still uses the raw
+    ``p`` against ``MAIA_MIN_PRIOR``, so a flat exponent can spread mass over
+    the sensible moves but can never resurrect a sub-cutoff howler. The
+    default 1.0 reproduces M2 exactly (legacy callers unchanged); non-finite
+    or non-positive values degrade to 1.0.
 
     Failure-soft by contract (review fold): entries with missing/non-numeric/
     non-finite/non-positive ``p`` are dropped; duplicate uci entries are
@@ -209,11 +254,19 @@ def pick_from_priors(priors: List[dict], seed) -> Optional[str]:
     if top not in pool:
         pool.append(top)  # argmax always eligible, even when all sub-floor
 
-    total = sum(d["p"] for d in pool)
+    try:
+        exp = float(sharpness)
+    except (TypeError, ValueError):
+        exp = 1.0
+    if not math.isfinite(exp) or exp <= 0:
+        exp = 1.0
+
+    weights = [d["p"] ** exp for d in pool]
+    total = sum(weights)
     r = random.Random(seed).random() * total
     acc = 0.0
-    for d in pool:
-        acc += d["p"]
+    for d, w in zip(pool, weights):
+        acc += w
         if r < acc:
             return d["uci"]
     return pool[-1]["uci"]  # float-rounding guard

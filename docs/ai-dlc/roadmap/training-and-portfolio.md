@@ -535,6 +535,16 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       data — may ship in two waves: 1200/1400 rungs first, sub-1100 wave
       second) · no-gos: no schema change; persona ids never reuse existing
       six
+      · **build status 2026-08-15: 12-bot grid SHIPPED at pragmatic rigor**
+      (owner interview: rungs 800–1800 × 200, two styles per rung, existing
+      six kept — 18 total; spec `../specs/roster-800-1800.md`). Maia-backed
+      via new `maiaBand` persona field + injection tiers on top + policy-
+      sharpness style contrast; rail grouped by rung with "est." labels
+      sub-1100; adjacent-rung ladder probe (`tools/ladder_probe.py`) run
+      committed under `docs/analytics/`. REMAINING to tick this box +
+      M5-level honesty: `../tickets/roster-full-rigor-followup.md`
+      (sealed-eval campaign, ±150 calibration, ≥50-game probe, playtest
+      sign-off, avatars).
 
 ### Chapter 5 — analytics-engineering platform (serves N4 + N2; added 2026-07-18)
 

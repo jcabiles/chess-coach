@@ -45,6 +45,13 @@ class Persona:
     input-side blunder gate; ``threatDistance`` is the off-plan-score threshold a
     missed threat must exceed to be missed (lower elo → lower threshold → misses
     more). See ``app/bot_blunder.py`` / ``docs/ai-dlc/specs/causal-blunder.md``.
+
+    ``maiaBand`` (M6 roster): when set, the persona's moves come from the
+    matching maia-<band>.pb.gz net (bands 1100–1900) with the blunder/mistake
+    tiers layered ON TOP as injection, and ``elo`` becomes a DISPLAY label
+    (may sit below the UCI_Elo floor — the SF fallback clamps at call time).
+    ``None`` keeps the pre-M6 semantics: ``elo`` is a real UCI_Elo and the
+    persona plays weakened Stockfish (or the legacy MAIA_NETS wiring).
     """
 
     id: str
@@ -56,6 +63,7 @@ class Persona:
     blunderRate: float
     threatDistance: float
     mistakeRate: float = 0.0
+    maiaBand: Optional[int] = None
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -81,8 +89,28 @@ DEFAULT_ID = "casey"
 _ELO_MIN = 1320
 _ELO_MAX = 3000
 
+# Maia-backed personas: elo is a display label (est. rating), not a UCI_Elo —
+# it may sit below the SF floor. Bands match the nine published maia nets.
+_MAIA_ELO_MIN = 400
+_MAIA_BANDS = frozenset(range(1100, 2000, 100))
+
 # The built-in ladder — hardcoded, set at import with NO file I/O. data/personas.json
-# ships the same four so the committed file and this default agree.
+# ships the same entries so the committed file and this default agree.
+#
+# Two backends coexist (M6 roster): the original six play weakened Stockfish
+# (casey additionally via the legacy MAIA_NETS wiring); the twelve maiaBand
+# personas (800–1800, two styles per rung) play the matching maia net with the
+# blunder/mistake tiers as injection on top — heavy at 800/1000 (dragging
+# maia-1100 below its band), tapering to a whisper at 1600 and zero at 1800
+# where the net's own error model is the only weakness (the 1600 rung keeps
+# a small mistakeRate because the maia-1600/1800 self-play strength gap is
+# compressed — ladder-probe evidence 2026-08-15). Style contrast comes from
+# policy-sampling sharpness (temperature-derived): the "hot" style samples
+# flatter across the net's plausible-move pool and is therefore a shade
+# weaker than its "cool" rung-mate — an accepted variety-for-strength
+# trade inside the ≥2%-prior human-move pool, absorbed by the approximate
+# rating labels. Injection dials are non-increasing and threatDistance
+# non-decreasing as the label climbs (ladder-monotonicity test).
 _DEFAULT_PERSONAS: tuple[Persona, ...] = (
     Persona("casey", "Ming Ling", 1350, "solid", "Kid prodigy — steady, but misses tactics.", 80, 0.85, 0.15, 0.0),
     Persona("diego", "Nina", 1350, "attacking", "Attacking club player — hunts your king, soft on defense.", 190, 0.85, 0.10, 0.0),
@@ -90,6 +118,24 @@ _DEFAULT_PERSONAS: tuple[Persona, ...] = (
     Persona("morgan", "Diana", 1550, "tactical", "Focused student — punishes loose play and hangs onto material.", 130, 0.65, 0.29, 0.0),
     Persona("alex", "Melvin", 1800, "aggressive", "Casual crusher — sharp, presses for the attack.", 200, 0.40, 0.50, 0.0),
     Persona("vera", "Mandeep", 2000, "positional", "Calm veteran — grinds small edges in long games.", 100, 0.20, 0.67, 0.0),
+    # --- M6 Maia-backed grid: 800–1800, two contrasting styles per rung ---
+    # Temperature does double duty on this path: style contrast WITHIN a rung
+    # AND (via policy_sharpness = 120/temp) strength ordering ACROSS rungs —
+    # every 800 temp is hotter (flatter sampling, weaker) than every 1000
+    # temp, and so on up; ladder-probe evidence 2026-08-15 showed a sharp
+    # low-rung persona inverts adjacent rungs that share a net.
+    Persona("teddy", "Teddy", 800, "wild", "Playground wildcard — swings at everything, hangs pieces.", 220, 0.50, 0.05, 0.40, 1100),
+    Persona("rosie", "Rosie", 800, "careful", "Garden-club regular — slow and careful, but tactics slip by.", 150, 0.60, 0.04, 0.30, 1100),
+    Persona("marco", "Marco", 1000, "attacking", "Lunch-break blitzer — attacks first, asks questions later.", 130, 0.30, 0.10, 0.25, 1100),
+    Persona("june", "June", 1000, "solid", "Library regular — steady development, misses long tactics.", 95, 0.22, 0.12, 0.30, 1100),
+    Persona("kofi", "Kofi", 1200, "tactical", "Park hustler — loves forks and cheap shots, drifts when quiet.", 120, 0.12, 0.15, 0.15, 1200),
+    Persona("sana", "Sana", 1200, "positional", "Study-group grinder — sensible plans, occasional slips.", 100, 0.08, 0.18, 0.18, 1200),
+    Persona("lena", "Lena", 1400, "aggressive", "Club fighter — sharp attacking chess, thin defense.", 110, 0.05, 0.20, 0.05, 1400),
+    Persona("harold", "Harold", 1400, "solid", "Weekend veteran — trades down and grinds endings.", 90, 0.0, 0.25, 0.08, 1400),
+    Persona("dmitri", "Dmitri", 1600, "tactical", "Tournament regular — calculates deep, presses too hard.", 125, 0.0, 0.40, 0.06, 1600),
+    Persona("wren", "Wren", 1600, "positional", "Quiet strategist — squeezes small edges move by move.", 100, 0.0, 0.45, 0.08, 1600),
+    Persona("yuki", "Yuki", 1800, "attacking", "Rising star — fearless sacrifices, relentless initiative.", 95, 0.0, 0.50, 0.0, 1800),
+    Persona("grant", "Grant", 1800, "solid", "Seasoned expert — precise, patient, punishes everything loose.", 75, 0.0, 0.55, 0.0, 1800),
 )
 
 # Module-level singleton — initialised to the built-in default so imports never
@@ -126,6 +172,7 @@ def _parse_persona(entry: dict) -> Persona:
     mistake_rate = entry.get("mistakeRate")
     if mistake_rate is None:
         mistake_rate = 0.0
+    maia_band = entry.get("maiaBand")
     return Persona(
         id=str(entry["id"]),
         name=str(entry["name"]),
@@ -136,6 +183,7 @@ def _parse_persona(entry: dict) -> Persona:
         blunderRate=float(blunder_rate),
         threatDistance=float(threat_distance),
         mistakeRate=float(mistake_rate),
+        maiaBand=None if maia_band is None else int(maia_band),
     )
 
 
@@ -149,8 +197,13 @@ def _validate(personas: list[Persona]) -> Optional[str]:
     if DEFAULT_ID not in ids:
         return f"default id '{DEFAULT_ID}' missing"
     for p in personas:
-        if not (_ELO_MIN <= p.elo <= _ELO_MAX):
-            return f"elo {p.elo} for '{p.id}' out of range [{_ELO_MIN}, {_ELO_MAX}]"
+        if p.maiaBand is not None and p.maiaBand not in _MAIA_BANDS:
+            return f"maiaBand {p.maiaBand} for '{p.id}' not a published maia band"
+        # Maia-backed: elo is a display label and may sit below the UCI_Elo
+        # floor (the SF fallback clamps at call time). SF-backed: real UCI_Elo.
+        elo_min = _MAIA_ELO_MIN if p.maiaBand is not None else _ELO_MIN
+        if not (elo_min <= p.elo <= _ELO_MAX):
+            return f"elo {p.elo} for '{p.id}' out of range [{elo_min}, {_ELO_MAX}]"
         if not math.isfinite(p.temperature) or p.temperature <= 0:
             return f"temperature {p.temperature} for '{p.id}' not finite and > 0"
         if not (0.0 <= p.blunderRate <= 1.0):
