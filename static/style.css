@@ -771,6 +771,9 @@ body.setup-mode #fen-error { display: none; }
   justify-content: center;
   width: 28px;
   height: 28px;
+  /* Global button padding (0.45/0.8rem) would leave a 2.4px content box in
+     this fixed 28px square and crush the × glyph to a sliver. */
+  padding: 0;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -1585,21 +1588,12 @@ body.trap-practice-mode #fen-error { display: none; }
    botplay.js (T5) wires state, app.js/T3 owns mode entry.
    ============================================================ */
 
-/* Relocated into the panel (spec T4): fills the panel width, no longer coupled
-   to --board-size. Disclosure header + collapse behavior are id-driven by
-   botplay.js and unchanged. */
+/* Lives inside the bot rail's pregame screen (two-step flow): a hairline
+   divider under the hero, then the settings/controls stack. */
 .botplay-block {
   margin: 0;
   border-top: 1px solid var(--border-subtle);
   padding-top: var(--space-3);
-}
-
-.botplay-block.collapsed .botplay-body {
-  display: none;
-}
-
-.botplay-block.collapsed .movelist-chevron {
-  transform: rotate(-90deg);
 }
 
 .botplay-body {
@@ -1609,16 +1603,121 @@ body.trap-practice-mode #fen-error { display: none; }
   padding-top: var(--space-2);
 }
 
-.botplay-persona-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
 .botplay-persona {
   font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* ---- Two-step rail screens (roster → pregame) ---- */
+/* Each screen owns the rail's full height; [hidden] needs the explicit
+   override because both carry a flex display (same gotcha as #bot-rail). */
+.bot-rail-roster,
+.bot-rail-pregame {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.bot-rail-roster[hidden],
+.bot-rail-pregame[hidden] { display: none; }
+
+/* ← All bots — quiet text button mirroring bot-rail-close's hover treatment. */
+.bot-rail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-out),
+              color var(--motion-fast) var(--ease-out);
+}
+
+.bot-rail-back:hover {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.bot-rail-back:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Pregame scroll region — the one scroll container on screen 2. */
+.bot-rail-pregame-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-4);
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+/* Hero — big portrait, name, rating, blurb, Maia line; all centered. */
+.pregame-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-1);
+  padding-bottom: var(--space-2);
+}
+
+.pregame-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--accent-dim);
+  display: inline-flex;
+  margin-bottom: var(--space-1);
+}
+
+.pregame-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* display:block above would override the [hidden] attr's UA display:none
+   (same gotcha as #bot-rail[hidden]) — the broken-image glyph would peek
+   through behind the initials fallback. */
+.pregame-avatar img[hidden] { display: none; }
+
+/* Initials fallback (no photo) — accent on the dim circle, card-style. */
+.pregame-avatar-initials {
+  margin: auto;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+.pregame-avatar-initials[hidden] { display: none; }
+
+.pregame-hero .botplay-persona {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pregame-rating {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.pregame-hero .botplay-persona-caption {
+  margin-top: var(--space-1);
   color: var(--text-secondary);
 }
 
@@ -1665,16 +1764,9 @@ body.trap-practice-mode #fen-error { display: none; }
   font-weight: 700;
 }
 
-/* Persona picker — reuses the analyze-color-select/engine-speed-select select
-   idiom (surface-raised fill, border token, accent on hover/focus). Options
-   are populated by botplay.js (T6) from /api/bot/status.personas; disabled
-   mid-game via the native attribute (T6), styled below. */
-.botplay-persona-picker-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
+/* Select idiom shared by the takeback/time-control pickers (and the hidden
+   persona state-carrier): surface-raised fill, border token, accent on
+   hover/focus; disabled mid-game via the native attribute. */
 .botplay-persona-select {
   background: var(--surface-raised);
   color: var(--text);
@@ -1797,6 +1889,24 @@ body.trap-practice-mode #fen-error { display: none; }
    reuses botplay-hint's subdued caption look. */
 .botplay-takeback-note {
   margin-top: calc(-1 * var(--space-2));
+}
+
+/* Start — the pregame screen's one primary action: full-width accent CTA
+   (same treatment as button.primary). Shrinks back to a peer button once the
+   in-game controls (Resign/Take back) join the row. */
+.botplay-start {
+  flex: 1;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--accent-on);
+  font-weight: 700;
+  border-color: var(--accent);
+}
+
+.botplay-start:hover {
+  filter: brightness(1.1);
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 /* Disabled state — Start button when /api/bot/status.available is false.
