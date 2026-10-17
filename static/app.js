@@ -1075,6 +1075,7 @@ function flip() {
   state.orientation = state.orientation === 'white' ? 'black' : 'white';
   ground.set({ orientation: state.orientation });
   persist();
+  emit('orientation:change');
 }
 
 function reset() {

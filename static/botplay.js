@@ -30,6 +30,7 @@ let personaCatalog = [];   // [{id,name,elo,style,description}] from /api/bot/st
 let defaultPersonaId = ''; // status.defaultPersonaId (picker fallback)
 let clockTimer = null;     // handle of the ~200ms clock tick interval (if any)
 let lastTickAt = 0;        // performance.now() reference for the last clock tick
+let railReturnFocus = null;
 
 const byId = (id) => document.getElementById(id);
 const state = () => _api.actions.getState();
@@ -281,25 +282,38 @@ function formatClock(centis) {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-// Render both clock readouts from the descriptor. #bot-clock-top = opponent,
-// #bot-clock-bottom = user, mapped by userColor. Hidden for untimed games. The
-// side-to-move's clock is emphasized (data-active); low time (<10s) flagged
-// (data-low) for extra emphasis.
+// Player rows and clocks follow board orientation; flips and move navigation
+// repaint via the hub's orientation:change / position:change events. Clocks
+// are hidden for untimed games. The side-to-move's clock is emphasized
+// (data-active); low time (<10s) flagged (data-low).
 function renderClocks() {
   const top = byId('bot-clock-top');
   const bottom = byId('bot-clock-bottom');
   if (!top || !bottom) return;
   const game = hub().botGetGame();
+  if (state().mode === 'bot-play' && game) {
+    const bottomColor = state().orientation;
+    const topColor = bottomColor === 'white' ? 'black' : 'white';
+    const name = (color) => `${color === game.userColor ? 'You' : game.personaLabel} · ${color === 'white' ? 'White' : 'Black'}`;
+    renderBoardPlayer('top', topColor, game);
+    renderBoardPlayer('bottom', bottomColor, game);
+    top.setAttribute('aria-label', `${name(topColor)} clock`);
+    bottom.setAttribute('aria-label', `${name(bottomColor)} clock`);
+    const tc = game.timeControl;
+    const summary = `${game.result ? 'Game over' : 'Game in progress'} · ${game.rated ? 'Rated' : 'Casual'} · ${tc ? `${tc.baseSec / 60}+${tc.incSec}` : 'Untimed'}`;
+    const summaryEl = byId('bot-game-summary');
+    // Rewriting unchanged text every tick drops selection and re-announces it.
+    if (summaryEl.textContent !== summary) summaryEl.textContent = summary;
+    byId('bot-game-history').hidden = state().cursor === game.movesUci.length;
+  }
   const timed = !!(game && game.timeControl && state().mode === 'bot-play');
   if (!timed) {
     top.hidden = true;
     bottom.hidden = true;
     return;
   }
-  const userWhite = game.userColor === 'white';
-  const userCentis = userWhite ? game.clockWhite : game.clockBlack;
-  const oppCentis = userWhite ? game.clockBlack : game.clockWhite;
-  const oppColor = userWhite ? 'black' : 'white';
+  const bottomColor = state().orientation;
+  const topColor = bottomColor === 'white' ? 'black' : 'white';
   const turn = currentPos().turn;
   const live = clockLive(game);
 
@@ -309,8 +323,8 @@ function renderClocks() {
     el.dataset.active = String(live && turn === color);
     el.dataset.low = String((centis | 0) <= 1000);
   };
-  paint(top, oppCentis, oppColor);
-  paint(bottom, userCentis, game.userColor);
+  paint(top, topColor === 'white' ? game.clockWhite : game.clockBlack, topColor);
+  paint(bottom, bottomColor === 'white' ? game.clockWhite : game.clockBlack, bottomColor);
 }
 
 // Reset the tick reference to "now" — called on every move commit and on
@@ -426,7 +440,14 @@ function reflectControls() {
   const active = state().mode === 'bot-play' && game && !game.result;
   showResign(!!active);
   const startBtn = byId('botplay-start');
-  if (startBtn) startBtn.textContent = (game && game.result) ? 'New game' : 'Start';
+  if (startBtn) {
+    startBtn.textContent = 'Start game';
+    startBtn.hidden = !!active;
+  }
+  byId('bot-game-new').hidden = !(game && game.result);
+  byId('bot-game-return').hidden = !active;
+  const toggleLabel = document.querySelector('.bot-rail-toggle-label');
+  if (toggleLabel) toggleLabel.textContent = active ? 'Game details' : 'Play vs Bot';
   reflectPersonaLock();
   reflectTimeControlLock();
   reflectTakeback();
@@ -786,6 +807,7 @@ function saveOnLeave(game) {
 
 function startGame() {
   if (busy) return;
+  if (state().mode === 'bot-play' && hub().botGetGame() && !hub().botGetGame().result) return;
   const startBtn = byId('botplay-start');
   if (startBtn && startBtn.classList.contains('is-disabled')) return;
 
@@ -853,6 +875,7 @@ function startGame() {
     setStatusLine('Your move.');
     giveUserTurn();
   }
+  returnToBoard();
 }
 
 // --- user move (onMove handler) --------------------------------------------
@@ -1094,6 +1117,7 @@ function exit() {
   showRetry(false);
   setStatusLine('');
   hub().botExit();
+  reflectControls();
 }
 
 // --- resume after refresh --------------------------------------------------
@@ -1138,6 +1162,10 @@ function resumeIfPending() {
 // native <dialog> lightbox instead (stopPropagation). During a live bot game
 // selection is locked (same condition as the picker lock) with a header hint.
 
+function personaAvatarUrl(id) {
+  return `/api/bot/avatar/${encodeURIComponent(id)}`;
+}
+
 // First-letter initials for the fallback circle (e.g. "Ming Ling" → "ML"),
 // capped at two letters, uppercased. Empty name → "?".
 function personaInitials(name) {
@@ -1145,6 +1173,50 @@ function personaInitials(name) {
   if (parts.length === 0) return '?';
   const letters = parts.slice(0, 2).map((w) => w[0]);
   return letters.join('').toUpperCase();
+}
+
+// Keep the identity button stable while clocks tick so focus and image loading
+// are unaffected. Only rebuild its content when the opponent/color changes.
+function renderBoardPlayer(side, color, game) {
+  const label = byId(`bot-game-${side}-name`);
+  const button = byId(`bot-game-${side}-profile`);
+  const isBot = color !== game.userColor;
+  label.hidden = isBot;
+  button.hidden = !isBot;
+  const colorLabel = color === 'white' ? 'White' : 'Black';
+  if (!isBot) {
+    label.textContent = `You · ${colorLabel}`;
+    return;
+  }
+  const persona = personaCatalog.find((p) => p.id === game.personaId);
+  const name = persona?.name || game.personaLabel;
+  const rating = persona ? ratingLabel(persona) : '';
+  const key = JSON.stringify([game.personaId, name, rating, color]);
+  if (button.dataset.identity === key) return;
+  button.dataset.identity = key;
+  button.setAttribute('aria-label', `View ${name}'s profile`);
+  button.title = `View ${name}'s profile`;
+  button.querySelector('.bot-game-player-name').textContent = name;
+  button.querySelector('.bot-game-profile-meta').textContent = [rating, colorLabel, 'View profile'].filter(Boolean).join(' · ');
+  const img = button.querySelector('img');
+  const initials = button.querySelector('.bot-game-avatar-initials');
+  initials.textContent = personaInitials(name);
+  initials.hidden = true;
+  img.hidden = false;
+  img.onerror = () => { img.hidden = true; initials.hidden = false; };
+  img.src = personaAvatarUrl(game.personaId);
+}
+
+function openBoardBotProfile(event) {
+  const game = hub().botGetGame();
+  if (state().mode !== 'bot-play' || !game) return;
+  // After a finished game the roster may have selected another opponent.
+  // The board always links to the opponent from the displayed game.
+  selectPersonaFromRail(game.personaId);
+  openRail(event.currentTarget);
+  showPregameScreen();
+  byId('bot-rail-pregame').querySelector('.bot-rail-pregame-scroll').scrollTop = 0;
+  byId('bot-rail-back').focus();
 }
 
 // Is card selection currently locked? Mirrors reflectPersonaLock's condition
@@ -1173,7 +1245,7 @@ function buildCard(p) {
   avatar.setAttribute('aria-label', `View ${p.name}'s portrait`);
 
   const img = document.createElement('img');
-  img.src = `/api/bot/avatar/${encodeURIComponent(p.id)}`;
+  img.src = personaAvatarUrl(p.id);
   img.alt = '';
   img.addEventListener('error', () => {
     // Missing photo → initials fallback; no lightbox for this persona.
@@ -1234,7 +1306,7 @@ function openLightbox(p) {
   const img = byId('avatar-lightbox-img');
   const cap = byId('avatar-lightbox-caption');
   if (!dlg || !img || !cap) return;
-  img.src = `/api/bot/avatar/${encodeURIComponent(p.id)}`;
+  img.src = personaAvatarUrl(p.id);
   img.alt = `${p.name}'s portrait`;
   cap.textContent = `${p.name} · ${ratingLabel(p)}`;
   if (typeof dlg.showModal === 'function' && !dlg.open) dlg.showModal();
@@ -1280,15 +1352,15 @@ function reflectPillAvatar() {
   if (!id) return;
   img.hidden = false;
   img.onerror = () => { img.hidden = true; };
-  img.src = `/api/bot/avatar/${encodeURIComponent(id)}`;
+  img.src = personaAvatarUrl(id);
 }
 
 // --- two-step screens (roster → pregame) ------------------------------------
 //
 // The rail holds two screens: #bot-rail-roster (card list, screen 1) and
-// #bot-rail-pregame (relocated settings + Start / in-game controls, screen 2).
+// #bot-rail-pregame (profile, settings, and Start, screen 2).
 // Selecting a card advances to pregame; ← All bots returns. While a game is
-// live, opening the rail lands directly on the pregame screen (clocks/resign).
+// live, opening the rail lands directly on its profile and locked settings.
 
 function showRosterScreen() {
   const roster = byId('bot-rail-roster');
@@ -1304,19 +1376,25 @@ function showRosterScreen() {
 function updatePregameHero() {
   const id = chosenPersonaId();
   const p = personaCatalog.find((x) => x.id === id);
+  const avatar = byId('pregame-avatar');
   const img = byId('pregame-avatar-img');
   const initials = byId('pregame-avatar-initials');
+  if (avatar) {
+    avatar.disabled = !p;
+    avatar.setAttribute('aria-label', p ? `View ${p.name}'s portrait` : 'Bot portrait');
+  }
   if (img && id) {
     img.hidden = false;
     if (initials) initials.hidden = true;
     img.onerror = () => {
       img.hidden = true;
+      if (avatar) avatar.disabled = true;
       if (initials) {
         initials.textContent = personaInitials(p ? p.name : '');
         initials.hidden = false;
       }
     };
-    img.src = `/api/bot/avatar/${encodeURIComponent(id)}`;
+    img.src = personaAvatarUrl(id);
   }
   const rating = byId('pregame-rating');
   if (rating) rating.textContent = p ? ratingLabel(p) : '';
@@ -1333,6 +1411,11 @@ function showPregameScreen() {
 
 // Static pregame-screen nav (← All bots + its own ×) — wired once at init.
 function wirePregameNav() {
+  const avatar = byId('pregame-avatar');
+  if (avatar) avatar.addEventListener('click', () => {
+    const p = personaCatalog.find((x) => x.id === chosenPersonaId());
+    if (p && !byId('pregame-avatar-img')?.hidden) openLightbox(p);
+  });
   const back = byId('bot-rail-back');
   if (back) back.addEventListener('click', showRosterScreen);
   const close = byId('bot-rail-close-pregame');
@@ -1469,6 +1552,9 @@ function onRailKeydown(e) {
 }
 
 function onRailPointerDown(e) {
+  // Portrait interactions belong to the modal, including its close button and
+  // backdrop. Keep the underlying roster or profile open when it is dismissed.
+  if (byId('avatar-lightbox')?.open) return;
   // Overlay (sheet) only; and only when the press lands outside the sheet
   // (i.e. on the ::before scrim, which registers as #bot-rail itself, or on
   // any element that is not inside the rail).
@@ -1502,14 +1588,17 @@ function applyRailVisible(visible) {
   if (main) main.classList.toggle('bot-rail-open', visible);
   if (rail) rail.hidden = !visible;
   if (toggle) toggle.setAttribute('aria-expanded', String(visible));
+  document.querySelectorAll('.bot-game-profile').forEach((button) => {
+    button.setAttribute('aria-expanded', String(visible));
+  });
   // Dismissal listeners live only while the rail is open (idempotent add/remove).
   detachRailDismiss();
   if (visible) attachRailDismiss();
 }
 
-function openRail() {
-  // Screen choice: a live game opens straight onto the pregame screen (that's
-  // where its clocks/resign/takeback live); otherwise start at the roster.
+function openRail(trigger = byId('bot-rail-toggle')) {
+  railReturnFocus = trigger;
+  // A live game opens its profile/settings; otherwise start at the roster.
   const game = hub().botGetGame();
   const live = state().mode === 'bot-play' && game && !game.result;
   if (live) showPregameScreen(); else showRosterScreen();
@@ -1532,12 +1621,19 @@ function closeRail() {
   const wasOpen = document.querySelector('main')?.classList.contains('bot-rail-open');
   applyRailVisible(false);
   writeUiPref('botRailVisible', false);
-  // Return focus to the pill that owns the rail (WCAG 2.4.3), but only if the
+  // Return focus to the control that opened the rail, but only if the
   // rail was actually open — avoid grabbing focus on a redundant close.
   if (wasOpen) {
-    const toggle = byId('bot-rail-toggle');
-    if (toggle) toggle.focus();
+    const target = railReturnFocus?.isConnected && !railReturnFocus.hidden
+      ? railReturnFocus : byId('bot-rail-toggle');
+    if (target) target.focus();
   }
+}
+
+function returnToBoard() {
+  closeRail();
+  byId('bot-game-info').focus({ preventScroll: true });
+  byId('bot-game-top').scrollIntoView({ block: 'start' });
 }
 
 function toggleRail() {
@@ -1564,11 +1660,21 @@ export function initBotplay(api) {
   wireRailToggle();
   wirePregameNav();
   wireLightbox();
+  byId('bot-game-top-profile').addEventListener('click', openBoardBotProfile);
+  byId('bot-game-bottom-profile').addEventListener('click', openBoardBotProfile);
 
+  api.on('position:change', renderClocks);
+  api.on('orientation:change', renderClocks);
   byId('botplay-start').addEventListener('click', startGame);
+  byId('bot-game-return').addEventListener('click', returnToBoard);
   byId('botplay-resign').addEventListener('click', resign);
   byId('botplay-retry').addEventListener('click', retry);
   byId('botplay-takeback').addEventListener('click', takeback);
+  byId('bot-game-new').addEventListener('click', () => {
+    openRail();
+    showPregameScreen();
+    byId('bot-rail-back').focus();
+  });
 
   // The hub dispatcher routes bot-play board moves here; exit is botExit.
   api.hub.registerModeHandlers('bot-play', { onMove, exit });
