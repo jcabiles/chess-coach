@@ -10,6 +10,9 @@ file I/O**, so ``all()`` / ``get()`` / ``default_id()`` work before ``init`` is
 ever called. ``init(path=None)`` optionally overrides the catalog from
 ``data/personas.json`` (env ``PERSONAS_FILE``); a missing / invalid / failing-
 validation file keeps the built-in default and logs one warning, never raises.
+A gitignored ``data/profiles.local.json`` (env ``PROFILES_FILE``) may then
+override display names, descriptions and portrait filenames by id; an invalid
+one is ignored on its own and never touches the loaded tuning.
 
 Engine-free and unit-pure — mirrors the ``book.py`` / ``repertoire.py`` singleton
 + env-override + warn-once idiom. All strength/style is temperature-only here;
@@ -24,7 +27,7 @@ import logging
 import math
 import os
 import random
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Optional
 
@@ -244,9 +247,78 @@ def _load(path: Optional[str]) -> None:
     logger.info("personas: loaded %d from '%s'", len(loaded), file_path)
 
 
-def init(path: Optional[str] = None) -> None:
-    """Load the persona catalog at app startup (env ``PERSONAS_FILE``); never raises."""
+# Local display overrides — kept separate from the committed catalog so a broken
+# local file can never reset engine tuning, and private names/photos never need
+# to touch a tracked file.
+_PROFILE_FIELDS = frozenset({"name", "description", "photo"})
+_photos: dict[str, str] = {}
+
+
+def _profile_error(raw: object, ids: set[str]) -> Optional[str]:
+    """Return None if a local profiles mapping is valid, else a short reason."""
+    if not isinstance(raw, dict):
+        return "top level must be an object keyed by bot id"
+    for pid, fields in raw.items():
+        if pid not in ids:
+            return f"unknown bot id '{pid}'"
+        if not isinstance(fields, dict):
+            return f"'{pid}' must map to an object"
+        extra = set(fields) - _PROFILE_FIELDS
+        if extra:
+            return f"'{pid}' sets {sorted(extra)}; only name, description and photo are allowed"
+        for key, value in fields.items():
+            if not isinstance(value, str) or not value.strip():
+                return f"'{pid}.{key}' must be a non-empty string"
+        photo = fields.get("photo")
+        if photo is not None and (Path(photo).name != photo or photo.startswith(".")):
+            return f"'{pid}.photo' must be a bare filename inside data/avatars/"
+    return None
+
+
+def _apply_profiles(path: Optional[str]) -> None:
+    """Overlay local names/descriptions/photos onto the loaded catalog; never raises."""
+    global _personas, _photos
+
+    _photos = {}
+    resolved = (
+        path
+        if path is not None
+        else os.environ.get("PROFILES_FILE", "data/profiles.local.json")
+    )
+    file_path = Path(resolved)
+    if not file_path.exists():
+        return
+    try:
+        raw = json.loads(file_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        logger.warning(
+            "personas: cannot read local profiles '%s': %s — ignoring it",
+            file_path,
+            exc,
+        )
+        return
+    reason = _profile_error(raw, {p.id for p in _personas})
+    if reason is not None:
+        logger.warning(
+            "personas: local profiles '%s' invalid (%s) — ignoring it",
+            file_path,
+            reason,
+        )
+        return
+
+    _personas = tuple(
+        replace(p, **{k: v for k, v in raw[p.id].items() if k != "photo"}) if p.id in raw else p
+        for p in _personas
+    )
+    _photos = {pid: f["photo"] for pid, f in raw.items() if "photo" in f}
+    logger.info("personas: applied %d local profile(s) from '%s'", len(raw), file_path)
+
+
+def init(path: Optional[str] = None, profiles_path: Optional[str] = None) -> None:
+    """Load the catalog (env ``PERSONAS_FILE``), then local profiles (env
+    ``PROFILES_FILE``) at app startup; never raises."""
     _load(path)
+    _apply_profiles(profiles_path)
 
 
 # ---------------------------------------------------------------------------
@@ -265,6 +337,11 @@ def get(persona_id: str) -> Optional[Persona]:
         if p.id == persona_id:
             return p
     return None
+
+
+def photo_filename(persona_id: str) -> str:
+    """Portrait filename in data/avatars/: a local override, else ``<id>.png``."""
+    return _photos.get(persona_id, f"{persona_id}.png")
 
 
 def default_id() -> str:

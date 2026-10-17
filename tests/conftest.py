@@ -15,6 +15,18 @@ import pytest
 
 
 @pytest.fixture(scope="session", autouse=True)
+def _ignore_local_profiles():
+    """Keep a developer's data/profiles.local.json out of every test's catalog."""
+    prev = os.environ.get("PROFILES_FILE")
+    os.environ["PROFILES_FILE"] = "tests/fixtures/does_not_exist_profiles.json"
+    yield
+    if prev is None:
+        os.environ.pop("PROFILES_FILE", None)
+    else:
+        os.environ["PROFILES_FILE"] = prev
+
+
+@pytest.fixture(scope="session", autouse=True)
 def _skip_engine_autostart():
     prev = os.environ.get("CHESS_SKIP_ENGINE_AUTOSTART")
     os.environ["CHESS_SKIP_ENGINE_AUTOSTART"] = "1"

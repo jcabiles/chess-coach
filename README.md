@@ -171,6 +171,20 @@ All via environment variables; sensible defaults mean none are required to start
 Saved games and their analysis live in `data/games.db` (and any PGNs you drop in
 `data/games/`) — both gitignored, never committed.
 
+## Custom bot names and photos (optional)
+
+Bots can show your own names and portraits without changing any tracked file:
+
+1. Put portrait images in `data/avatars/` (gitignored). A file named `<bot id>.png`
+   (for example `casey.png`) is picked up automatically.
+2. To rename a bot or use a different filename, copy `data/profiles.example.json`
+   to `data/profiles.local.json` (gitignored) and edit it. Each key is a bot id;
+   each entry may set `name`, `description` and `photo` (a filename in
+   `data/avatars/`). Engine strength cannot be changed here.
+3. Restart the server. An invalid file is ignored with a warning in the server log.
+
+Set `PROFILES_FILE` to load the profiles from another path.
+
 ## Opening data
 
 The opening trainer uses the bundled lichess-org/chess-openings TSVs under

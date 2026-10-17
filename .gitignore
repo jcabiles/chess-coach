@@ -20,9 +20,13 @@ SETUP-SANDBOX.md
 
 # Dev/debug artifacts
 .playwright-mcp/
-board-debug.png
-layout-check.png
-setup-mode.png
+# Any image at the repo root (screenshots, downloads). README images live in docs/.
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+/*.gif
+/*.heic
 
 # Local dev-server runtime (managed by scripts/serve.sh). Globbed to cover the
 # rotated .server.log.1 and any instance started with a PIDFILE/LOGFILE override.
@@ -44,3 +48,5 @@ scripts/bulk_import.py
 
 # Bot avatars: user-supplied portraits (never commit; app falls back to initials)
 data/avatars/
+# Local bot names/photos (see data/profiles.example.json); never commit.
+data/profiles.local.json
