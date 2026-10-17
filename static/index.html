@@ -91,9 +91,39 @@
     </div>
 
     <section class="board-col">
+      <div id="bot-game-top" class="bot-game-player" aria-label="Top player">
+        <span id="bot-game-top-name" class="bot-game-player-name"></span>
+        <button id="bot-game-top-profile" class="bot-game-profile" type="button" aria-controls="bot-rail" aria-expanded="false" hidden>
+          <span class="bot-game-avatar" aria-hidden="true"><img alt=""><span class="bot-game-avatar-initials" hidden></span></span>
+          <span class="bot-game-identity"><span class="bot-game-player-name"></span><span class="bot-game-profile-meta"></span></span>
+        </button>
+        <span id="bot-clock-top" class="botplay-clock" hidden>00:00</span>
+      </div>
       <div class="board-wrap">
         <div id="eval-bar"></div>
         <div id="board"></div>
+      </div>
+
+      <div id="bot-game-bottom" class="bot-game-player" aria-label="Bottom player">
+        <span id="bot-game-bottom-name" class="bot-game-player-name"></span>
+        <button id="bot-game-bottom-profile" class="bot-game-profile" type="button" aria-controls="bot-rail" aria-expanded="false" hidden>
+          <span class="bot-game-avatar" aria-hidden="true"><img alt=""><span class="bot-game-avatar-initials" hidden></span></span>
+          <span class="bot-game-identity"><span class="bot-game-player-name"></span><span class="bot-game-profile-meta"></span></span>
+        </button>
+        <span id="bot-clock-bottom" class="botplay-clock" hidden>00:00</span>
+      </div>
+      <div id="bot-game-info" class="bot-game-info" role="region" tabindex="-1" aria-label="Bot game">
+        <div id="bot-game-summary" class="bot-game-summary"></div>
+        <div id="botplay-status" class="botplay-status" role="status" aria-live="polite"></div>
+        <div id="bot-game-history" class="botplay-hint" hidden>Viewing an earlier position — return to the latest move to continue.</div>
+        <div id="bot-game-controls" class="botplay-controls">
+          <button id="botplay-resign" class="botplay-resign" type="button" hidden>Resign</button>
+          <button id="botplay-retry" class="botplay-retry" type="button" hidden>Retry</button>
+          <button id="botplay-takeback" class="botplay-takeback" type="button" hidden>Take back</button>
+          <span id="botplay-takeback-count" class="botplay-takeback-count"></span>
+          <button id="bot-game-new" type="button" hidden>New game</button>
+        </div>
+        <div id="botplay-takeback-note" class="botplay-hint botplay-takeback-note" hidden>Takeback used — this game no longer counts toward your rating.</div>
       </div>
 
       <div class="fen-row">
@@ -449,8 +479,7 @@
       <!-- Screen 1: roster — header + card list built by renderRail(). -->
       <div id="bot-rail-roster" class="bot-rail-roster"></div>
 
-      <!-- Screen 2: pregame (settings + Start) and, once a game is live,
-           in-game controls (clocks, resign, takebacks). -->
+      <!-- Screen 2: profile and game settings. Live controls sit by the board. -->
       <div id="bot-rail-pregame" class="bot-rail-pregame" hidden>
         <div class="bot-rail-header">
           <button id="bot-rail-back" type="button" class="bot-rail-back">
@@ -464,7 +493,7 @@
 
         <div class="bot-rail-pregame-scroll">
           <div class="pregame-hero">
-            <span class="pregame-avatar"><img id="pregame-avatar-img" src="" alt=""><span id="pregame-avatar-initials" class="pregame-avatar-initials" aria-hidden="true" hidden></span></span>
+            <button id="pregame-avatar" class="pregame-avatar" type="button" aria-label="View bot portrait" aria-haspopup="dialog"><img id="pregame-avatar-img" src="" alt=""><span id="pregame-avatar-initials" class="pregame-avatar-initials" aria-hidden="true" hidden></span></button>
             <span id="botplay-persona" class="botplay-persona">Casual sparring bot</span>
             <span id="pregame-rating" class="pregame-rating"></span>
             <div id="botplay-persona-caption" class="botplay-hint botplay-persona-caption"></div>
@@ -517,11 +546,6 @@
             </div>
             <div class="botplay-hint botplay-clock-hint">Clocks pause on reload — time spent away isn't charged.</div>
 
-            <div class="botplay-clocks">
-              <span id="bot-clock-top" class="botplay-clock" aria-label="Opponent clock" hidden>00:00</span>
-              <span id="bot-clock-bottom" class="botplay-clock" aria-label="Your clock" hidden>00:00</span>
-            </div>
-
             <div class="botplay-rating-row">
               <div id="botplay-elo" class="botplay-elo">Bot rating: — (0 games)</div>
               <span id="botplay-chesscom" class="botplay-chesscom" hidden></span>
@@ -531,16 +555,10 @@
               <input type="number" id="chesscom-rating" class="botplay-chesscom-input" min="0" step="1" placeholder="e.g. 1500">
             </div>
 
-            <div id="botplay-status" class="botplay-status" aria-live="polite"></div>
-
             <div class="botplay-controls">
-              <button id="botplay-start" class="botplay-start" type="button">Start</button>
-              <button id="botplay-resign" class="botplay-resign" type="button" hidden>Resign</button>
-              <button id="botplay-retry" class="botplay-retry" type="button" hidden>Retry</button>
-              <button id="botplay-takeback" class="botplay-takeback" type="button" hidden>Take back</button>
-              <span id="botplay-takeback-count" class="botplay-takeback-count"></span>
+              <button id="botplay-start" class="botplay-start" type="button">Start game</button>
+              <button id="bot-game-return" class="botplay-start" type="button" hidden>Return to game</button>
             </div>
-            <div id="botplay-takeback-note" class="botplay-hint botplay-takeback-note" hidden>Takeback used — this game no longer counts toward your rating.</div>
             <div id="botplay-hint" class="botplay-hint" hidden></div>
             </div>
           </div>

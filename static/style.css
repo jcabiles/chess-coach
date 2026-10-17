@@ -344,7 +344,82 @@ main.bot-rail-open {
   --board-row-width: calc(var(--board-size) + 22px);
 }
 
-/* Board wrap: eval-bar | board side by side */
+/* Keep match identity, clocks, and actions beside the board during bot play. */
+.bot-game-player,
+.bot-game-info { display: none; }
+
+body[data-mode="bot-play"] .board-col {
+  --board-size: min(560px, calc(100dvh - 320px), calc(100cqw - 22px));
+}
+
+body[data-mode="bot-play"] .fen-row { display: none; }
+
+body[data-mode="bot-play"] .bot-game-player {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: var(--board-row-width);
+  min-height: 34px;
+  flex-shrink: 0;
+}
+
+.bot-game-player-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.bot-game-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 3px;
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: left;
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.bot-game-profile:hover { background: var(--surface-raised); border-color: var(--border); }
+.bot-game-profile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bot-game-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 600;
+}
+.bot-game-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.bot-game-identity { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.bot-game-profile-meta { font-size: 0.72rem; color: var(--text-secondary); }
+.bot-game-profile[hidden], .bot-game-avatar [hidden], .bot-game-player-name[hidden] { display: none; }
+.bot-game-player .botplay-clock { flex-shrink: 0; }
+
+body[data-mode="bot-play"] .bot-game-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: var(--board-row-width);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+}
+
+.bot-game-info:focus-visible { outline: 2px solid var(--accent); }
+.bot-game-summary { font-size: 0.8rem; color: var(--text-secondary); }
+.bot-game-info .botplay-status { color: var(--text); font-weight: 600; }
+#botplay-start[hidden], #bot-game-new[hidden],
+#bot-game-return[hidden], #bot-game-history[hidden] { display: none; }
+
 .board-wrap {
   display: flex;
   flex-direction: row;
@@ -1672,6 +1747,9 @@ body.trap-practice-mode #fen-error { display: none; }
 }
 
 .pregame-avatar {
+  padding: 0;
+  border: 0;
+  cursor: zoom-in;
   width: 72px;
   height: 72px;
   border-radius: 50%;
@@ -1679,6 +1757,13 @@ body.trap-practice-mode #fen-error { display: none; }
   background: var(--accent-dim);
   display: inline-flex;
   margin-bottom: var(--space-1);
+}
+
+.pregame-avatar:disabled { cursor: default; }
+
+.pregame-avatar:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 .pregame-avatar img {
@@ -1821,16 +1906,10 @@ body.trap-practice-mode #fen-error { display: none; }
   margin-top: calc(-1 * var(--space-2));
 }
 
-/* Dual clock readouts (opponent top / user bottom) — shown only for a timed
-   game (botplay.js toggles [hidden]). Tabular figures so digits don't jitter as
-   the clock ticks; the side-to-move's clock is emphasized, low time (<10s)
-   flagged in the danger tone. */
-.botplay-clocks {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
+/* Clock readouts in the board's player rows — shown only for a timed game
+   (botplay.js toggles [hidden]). Tabular figures so digits don't jitter as the
+   clock ticks; the side-to-move's clock is emphasized, low time (<10s) flagged
+   in the danger tone. */
 .botplay-clock {
   font-size: 0.95rem;
   font-weight: 600;
