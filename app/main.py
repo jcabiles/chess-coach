@@ -600,11 +600,6 @@ async def restart_engine(engine: StockfishEngine = Depends(get_engine)):
 # engine's and maps to 503 here (the analysis engine's health is irrelevant).
 # ---------------------------------------------------------------------------
 
-#: Back-compat persona label for ``GET /api/bot/status`` — the DEFAULT persona's
-#: display name (B4). Derived from the persona catalog so status + this constant
-#: agree; a bare request (no personaId) reproduces B3 behavior with this bot.
-BOT_PERSONA_LABEL = personas.get(personas.default_id()).name
-
 #: Opening phase cutoff (half-moves): below this ply a persona request samples
 #: among ``SAMPLE_K`` candidates for mild variety; at/after it, best move only.
 OPENING_PLIES = 8
@@ -2145,10 +2140,15 @@ async def index():
     )
 
 
-# Bot avatars: user-supplied portraits, gitignored (like data/games). Mounted
-# only when the folder exists so a fresh clone (no avatars) still imports and
-# boots — the frontend falls back to initials on 404.
-if AVATARS_DIR.is_dir():
-    app.mount("/avatars", StaticFiles(directory=AVATARS_DIR), name="avatars")
+@app.get("/api/bot/avatar/{persona_id}")
+async def bot_avatar(persona_id: str):
+    """Serve a bot's portrait from the gitignored data/avatars/ by bot id, so the
+    browser never sees local filenames. 404 → the frontend shows initials."""
+    if personas.get(persona_id) is None:
+        raise HTTPException(status_code=404, detail="Unknown bot.")
+    path = AVATARS_DIR / personas.photo_filename(persona_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="No portrait for this bot.")
+    return FileResponse(path)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

@@ -1,0 +1,10 @@
+{
+  "teddy": {
+    "name": "Uncle Sam",
+    "description": "Family reunion regular — attacks first, apologizes later.",
+    "photo": "uncle-sam.jpg"
+  },
+  "rosie": {
+    "photo": "rosie.jpg"
+  }
+}

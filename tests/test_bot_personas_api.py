@@ -320,27 +320,60 @@ def test_save_unknown_persona_400(save_client):
     assert save_client.get("/api/games").json() == []
 
 
-# --- /avatars static mount (board-bots-ux T2) --------------------------------
+# --- /api/bot/avatar/{id} + local profiles ---------------------------------
 
 
-def test_avatars_mount_serves_when_dir_present(client):
-    """When data/avatars/ exists (gitignored, user-supplied), /avatars serves it.
+@pytest.fixture
+def avatar_env(tmp_path, monkeypatch):
+    """A temp data/avatars/ plus a temp local-profiles path; catalog reset after."""
+    import app.main as main
+    from app import personas
 
-    Skips on a fresh clone with no avatars — the mount is conditional at import
-    and the frontend falls back to initials.
-    """
-    from app.main import AVATARS_DIR
+    avatars = tmp_path / "avatars"
+    avatars.mkdir()
+    monkeypatch.setattr(main, "AVATARS_DIR", avatars)
+    profiles = tmp_path / "profiles.local.json"
+    monkeypatch.setenv("PROFILES_FILE", str(profiles))
+    yield avatars, profiles
+    personas.init(profiles_path=str(tmp_path / "none.json"))
 
-    if not AVATARS_DIR.is_dir():
-        pytest.skip("data/avatars/ absent — conditional mount not registered")
-    files = sorted(AVATARS_DIR.glob("*.png"))
-    if not files:
-        pytest.skip("data/avatars/ empty")
-    r = client.get(f"/avatars/{files[0].name}")
+
+def test_avatar_served_by_id_with_default_filename(avatar_env):
+    avatars, _ = avatar_env
+    (avatars / "casey.png").write_bytes(b"\x89PNG fake")
+    with TestClient(app) as c:
+        r = c.get("/api/bot/avatar/casey")
     assert r.status_code == 200
     assert r.headers["content-type"] == "image/png"
-    # Unknown avatar → 404 (frontend initials fallback path).
-    assert client.get("/avatars/nope.png").status_code == 404
+    assert r.content == b"\x89PNG fake"
+
+
+def test_avatar_uses_local_profile_photo_and_name(avatar_env):
+    avatars, profiles = avatar_env
+    (avatars / "my photo.jpg").write_bytes(b"jpeg bytes")
+    profiles.write_text(json.dumps({"teddy": {"name": "Uncle Sam", "photo": "my photo.jpg"}}))
+    with TestClient(app) as c:
+        r = c.get("/api/bot/avatar/teddy")
+        status = c.get("/api/bot/status").json()
+    assert r.status_code == 200
+    assert r.content == b"jpeg bytes"
+    teddy = next(p for p in status["personas"] if p["id"] == "teddy")
+    assert teddy["name"] == "Uncle Sam"
+    assert "photo" not in teddy  # local filenames never reach the browser
+
+
+def test_avatar_404_for_unknown_bot_and_missing_file(avatar_env):
+    with TestClient(app) as c:
+        assert c.get("/api/bot/avatar/casey").status_code == 404
+        assert c.get("/api/bot/avatar/nobody").status_code == 404
+        assert c.get("/api/bot/avatar/..%2Fpersonas.json").status_code == 404
+
+
+def test_default_label_follows_local_profile(avatar_env):
+    _, profiles = avatar_env
+    profiles.write_text(json.dumps({"casey": {"name": "Coach Pat"}}))
+    with TestClient(app) as c:
+        assert c.get("/api/bot/status").json()["personaLabel"] == "Coach Pat"
 
 
 def test_avatars_dir_constant_is_gitignored_location():

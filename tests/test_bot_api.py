@@ -13,8 +13,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as main
+from app import personas
 from app.bot_engine import EngineUnavailable, get_bot_engine
-from app.main import BOT_PERSONA_LABEL, app
+from app.main import app
 
 START_FEN = chess.STARTING_FEN
 
@@ -214,7 +215,7 @@ def test_bot_status_available_true(monkeypatch):
     assert resp.status_code == 200
     body = resp.json()
     assert body["available"] is True
-    assert body["personaLabel"] == BOT_PERSONA_LABEL
+    assert body["personaLabel"] == personas.get(personas.default_id()).name
     # Per-persona readiness covers casey (legacy MAIA_NETS) plus the twelve
     # M6 maiaBand personas — all not-ready under conftest's _maia_off fixture.
     maia_ids = [

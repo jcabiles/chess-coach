@@ -1173,7 +1173,7 @@ function buildCard(p) {
   avatar.setAttribute('aria-label', `View ${p.name}'s portrait`);
 
   const img = document.createElement('img');
-  img.src = `/avatars/${p.id}.png`;
+  img.src = `/api/bot/avatar/${encodeURIComponent(p.id)}`;
   img.alt = '';
   img.addEventListener('error', () => {
     // Missing photo → initials fallback; no lightbox for this persona.
@@ -1234,7 +1234,7 @@ function openLightbox(p) {
   const img = byId('avatar-lightbox-img');
   const cap = byId('avatar-lightbox-caption');
   if (!dlg || !img || !cap) return;
-  img.src = `/avatars/${p.id}.png`;
+  img.src = `/api/bot/avatar/${encodeURIComponent(p.id)}`;
   img.alt = `${p.name}'s portrait`;
   cap.textContent = `${p.name} · ${ratingLabel(p)}`;
   if (typeof dlg.showModal === 'function' && !dlg.open) dlg.showModal();
@@ -1280,7 +1280,7 @@ function reflectPillAvatar() {
   if (!id) return;
   img.hidden = false;
   img.onerror = () => { img.hidden = true; };
-  img.src = `/avatars/${id}.png`;
+  img.src = `/api/bot/avatar/${encodeURIComponent(id)}`;
 }
 
 // --- two-step screens (roster → pregame) ------------------------------------
@@ -1316,7 +1316,7 @@ function updatePregameHero() {
         initials.hidden = false;
       }
     };
-    img.src = `/avatars/${id}.png`;
+    img.src = `/api/bot/avatar/${encodeURIComponent(id)}`;
   }
   const rating = byId('pregame-rating');
   if (rating) rating.textContent = p ? ratingLabel(p) : '';

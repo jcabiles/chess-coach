@@ -492,3 +492,70 @@ def test_weighted_choice_mover_pov_mate_sorts():
     scores = [100000, 20, -100000]
     picks = [personas.weighted_choice(scores, 100, seed=s) for s in range(100)]
     assert set(picks) == {0}  # the +mate index always wins
+
+
+# ---------------------------------------------------------------------------
+# Local profiles overlay (data/profiles.local.json)
+# ---------------------------------------------------------------------------
+
+
+def _write(tmp_path, obj, name="profiles.json"):
+    p = tmp_path / name
+    p.write_text(json.dumps(obj))
+    return str(p)
+
+
+def test_profiles_override_display_fields_only(tmp_path):
+    before = personas.get("teddy")
+    path = _write(tmp_path, {"teddy": {"name": "Uncle Sam", "description": "Family regular."}})
+    personas.init(MISSING, path)
+    after = personas.get("teddy")
+    assert (after.name, after.description) == ("Uncle Sam", "Family regular.")
+    assert after.elo == before.elo and after.temperature == before.temperature
+    assert personas.get("rosie").name == "Rosie"
+
+
+def test_profile_photo_filename_override_and_default(tmp_path):
+    path = _write(tmp_path, {"teddy": {"photo": "sam.jpg"}})
+    personas.init(MISSING, path)
+    assert personas.photo_filename("teddy") == "sam.jpg"
+    assert personas.photo_filename("rosie") == "rosie.png"
+    personas.init(MISSING, MISSING)
+    assert personas.photo_filename("teddy") == "teddy.png"
+
+
+@pytest.mark.parametrize(
+    "obj",
+    [
+        {"teddy": {"elo": 2500}},
+        {"teddy": {"name": "X", "temperature": 1}},
+        {"nobody": {"name": "X"}},
+        {"teddy": {"photo": "../personas.json"}},
+        {"teddy": {"photo": "sub/dir.png"}},
+        {"teddy": {"photo": ".hidden.png"}},
+        {"teddy": {"name": ""}},
+        {"teddy": "Uncle Sam"},
+        ["teddy"],
+    ],
+)
+def test_invalid_profiles_ignored_and_catalog_kept(tmp_path, obj):
+    catalog = _write(tmp_path, {"personas": [
+        {"id": "casey", "name": "Custom Casey", "elo": 1500, "style": "solid", "description": "d"},
+        {"id": "teddy", "name": "Teddy", "elo": 1400, "style": "solid", "description": "d"},
+    ]}, "catalog.json")
+    personas.init(catalog, _write(tmp_path, obj))
+    assert [p.name for p in personas.all()] == ["Custom Casey", "Teddy"]
+    assert personas.photo_filename("teddy") == "teddy.png"
+
+
+def test_malformed_profiles_json_keeps_catalog(tmp_path):
+    bad = tmp_path / "profiles.json"
+    bad.write_text("{not json")
+    personas.init(MISSING, str(bad))
+    assert personas.all() == list(personas._DEFAULT_PERSONAS)
+
+
+def test_profiles_env_override(tmp_path, monkeypatch):
+    monkeypatch.setenv("PROFILES_FILE", _write(tmp_path, {"casey": {"name": "Coach Pat"}}))
+    personas.init(MISSING)
+    assert personas.get("casey").name == "Coach Pat"
