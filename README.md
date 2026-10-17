@@ -161,6 +161,7 @@ All via environment variables; sensible defaults mean none are required to start
 | `STOCKFISH_PATH` | `stockfish` on `PATH` | Path to the engine binary, if it isn't on your `PATH`. |
 | `CHESS_USERNAME` | _(unset)_ | Comma-separated names/aliases you play under (lichess / chess.com). Imported games are tagged with **your** color so the review coach analyzes *your* mistakes only. If unset, set the color per-import in the Review tab; un-tagged games are skipped in the profile. |
 | `GAMES_DB` | `data/games.db` | SQLite file for saved games + cached analysis (gitignored). |
+| `PROFILES_FILE` | `data/profiles.local.json` | Local bot names and photos (gitignored); see *Custom bot names and photos*. |
 | `REVIEW_BG_DEPTH` | `10` | Stockfish depth for background game-review analysis. Interactive moves use a deeper search; the background job yields to interactive requests so play stays responsive. |
 | `ENGINE_SOFT_TIME` | `3.0` | Soft per-search time cap (seconds) for interactive analysis: Stockfish stops at the target depth **or** this time, whichever comes first, so a sharp position can't stall the UI. |
 | `ENGINE_HARD_TIMEOUT` | `8.0` | Hard watchdog (seconds): any single engine call exceeding this auto-kills and relaunches the Stockfish process so it can never wedge. Must be greater than `ENGINE_SOFT_TIME`. |

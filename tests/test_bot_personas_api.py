@@ -335,8 +335,7 @@ def avatar_env(tmp_path, monkeypatch):
     profiles = tmp_path / "profiles.local.json"
     monkeypatch.setenv("PROFILES_FILE", str(profiles))
     yield avatars, profiles
-    monkeypatch.delenv("PROFILES_FILE")
-    personas.init()
+    personas.init(profiles_path=str(tmp_path / "none.json"))
 
 
 def test_avatar_served_by_id_with_default_filename(avatar_env):
