@@ -6,8 +6,8 @@ file adds the repo's specifics and how to work a ticket.
 
 - **Check command:** `make check` (lint plus the full test suite, about 4 minutes). Run it
   before you stop; a red or unrun check means the work is not done.
-- **Tickets for agents** are the "Agent tickets" section of
-  `docs/ai-dlc/roadmap/training-and-portfolio.md`. Take one at a time, in its own worktree.
+- **Tickets for agents** are in `docs/ai-dlc/agent-tickets.md`. Take one at a time, in its own
+  worktree. Roadmap items not listed there are not ready for agents.
 - **Never push, merge or check a roadmap box.** A reviewer re-runs the check and records the
   review; only then can the branch be pushed.
 
@@ -66,8 +66,9 @@ live server is not available, check routes in-process with FastAPI's `TestClient
 
 ## Working an agent ticket
 
-1. **Pick.** Use the ticket your prompt names. Otherwise take the first unchecked ticket in the
-   "Agent tickets" section whose branch does not exist yet (`git branch --list 'ticket/*'`).
+1. **Pick.** Use the ticket your prompt names. Otherwise take the first unchecked ticket in
+   `docs/ai-dlc/agent-tickets.md` whose branch does not exist yet (`git branch --list 'ticket/*'`).
+   If none is left, stop and say so.
 2. **Claim it** from the repo root with `make ticket ID=<id>`. It refuses a ticket whose branch
    already exists, which means another session has it.
    - Codex: this writes to `.git`, so it asks the project owner's approval.
@@ -90,5 +91,6 @@ live server is not available, check routes in-process with FastAPI's `TestClient
 
 `core.hooksPath` points this repo at shared hooks outside the repo. They refuse a commit with no
 `Agent-Vendor`/`Agent-Model` trailers, any text naming the project owner, staged secrets or
-private notes, and code that fails `ruff check`. The push hook refuses any commit without a
+private notes. They run no repo code, so lint and tests are not checked at commit time;
+`make check` and the review cover them. The push hook refuses any commit without a
 review record. Never bypass them (`--no-verify`, `-n`, or changing `core.hooksPath`).
