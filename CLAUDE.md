@@ -1,70 +1,9 @@
 # CLAUDE.md
 
-Guidance for Claude Code when working in this repository.
+Guidance for Claude Code when working in this repository. The repo facts, commands, constraints
+and the ticket procedure every agent shares are in `AGENTS.md`:
 
-## What this is
-
-A local, single-user **Stockfish chess training app**: FastAPI + python-chess
-backend driving Stockfish, chessground/chessops frontend (one SPA, tab panels).
-Play both colors, load FENs, undo/redo/flip, a clickable **move list**, live eval
-+ move-quality labels, localStorage session persistence, and a setup/pregame
-position editor. Plus four trainers:
-- **opening trainer** (live opening detection + candidate openings + a study
-  walkthrough with commentary; bundled lichess openings TSVs + `data/commentary.json`),
-- **opening traps trainer** (browsable catalog, watch + practice modes; `data/traps.json`),
-- **repertoire trainer** (per-color prepared lines: browse catalog + practice with
-  deviation-checking; `data/repertoire.json`), and
-- **game-review coach** (import/persist PGN, replay, a cross-game mistake/blunder
-  **profiler**, and **pre-blunder foresight** during replay — a deterministic
-  Stockfish + python-chess pipeline with template narration, no LLM; backed by
-  SQLite `data/games.db` + a `data/games/` drop-folder). Modules: `storage`, `pgn`,
-  `motifs`, `review`, `coaching`, `profile`, `insights`, `accuracy`, `endgame`.
-
-## Commands
-
-```sh
-# One-time setup
-brew install stockfish                 # engine binary (or set STOCKFISH_PATH)
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt        # if truststore error: add --cert "$(python3 -m certifi)"
-
-# Run in the background (8001 because 8000 is often taken by other local apps).
-# Survives closing the terminal; returns only once the server answers.
-chess-coach start | stop | restart | status   # → http://localhost:8001
-scripts/serve.sh start                        # same thing, without direnv
-
-# Run in the foreground with auto-reload (dies with its terminal)
-uvicorn app.main:app --reload --port 8001
-
-# Test
-pytest                                  # full suite
-pytest tests/test_analysis.py           # pure logic — no Stockfish binary needed
-pytest tests/test_api.py::test_move_legal_labels_quality   # a single test
-```
-
-## Constraints (non-obvious)
-
-- Server is **stateless per request** for play + the opening/traps/repertoire
-  trainers (move history lives client-side) — **except game review**, which persists
-  to SQLite (`app/storage.py`, `data/games.db`) and runs a **background analysis
-  task** (`app/review.py`). User game data (`data/games.db`, `data/games/`) is
-  **gitignored**; never commit it.
-- `app/engine.py`: one Stockfish process, all access serialized behind a single
-  `asyncio.Lock` (SimpleEngine isn't thread-safe). Import-safe if the binary is
-  absent (`EngineUnavailable`). Interactive analyses use `SPEED_PRESETS` node
-  budgets (`speed` request field: fast/balanced/deep; both `/api/move` evals must
-  share one preset — matched-limit cpLoss contract); `analyze_multi(fen, depth,
-  multipv)` stays depth-only for reviews and shares the same lock; the review job
-  funnels through it and yields to interactive `/api/move` (via
-  `review.note_interactive_start/end`). Never pass `game=`/send `ucinewgame`
-  casually — it cold-starts the warm transposition table.
-- `app/analysis.py` (plus `motifs.py`, `pgn.py`, `accuracy.py`, `endgame.py`) are
-  **pure**; `coaching.py` is pure logic (imports only storage's `LeakRecord` type);
-  `profile.py`/`insights.py` are engine-free read-models over SQLite. All are
-  unit-testable without a Stockfish binary; the full suite runs with no engine via
-  the `get_engine` fake seam.
-- Reuse `analysis.pov_score_to_white_cp` / `classify` — all evals are White-POV
-  before classification; don't re-derive the mover-sign rule.
+@AGENTS.md
 
 ## Commit policy (IMPORTANT)
 
@@ -72,21 +11,21 @@ Commit only after a change is **implemented, verified, and reviewed** — never 
 
 1. **Implemented** — complete, not partial.
 2. **Verified** — evidence seen, not assumed:
-   - Python/API: `pytest` passes.
+   - Python/API: `make check` passes.
    - Frontend/UI: exercised in the browser (Playwright or manual).
 3. **Reviewed** — diff read for correctness; no debug artifacts left
    (`console.log`, `window.__dbg`, screenshots, `.playwright-mcp/`).
 
 **Format:** Conventional Commits subject (`feat:`, `fix:`, `refactor:`, `docs:`,
 `test:`, `chore:`); imperative, ≤ 50 chars; body explains *why* when non-obvious.
-End every message with:
+End every message with the `Agent-Vendor:` and `Agent-Model:` trailers (the git
+hooks refuse a commit without them), then:
 `Co-Authored-By: Claude <noreply@anthropic.com>`
 
-The attribution names no model version on purpose. A pinned version is correct
-only until the next model ships, and after that it silently misattributes every
-commit written under it — nothing in the workflow prompts anyone to update the
-line. Where a model version genuinely matters, it is a fact about the code (see
-`NARRATIVE_MODEL` in `app/narrative.py`), not about who wrote the commit.
+The `Co-Authored-By` line names no model version on purpose: a version pinned in
+this file is correct only until the next model ships. The `Agent-Model:` trailer
+does not have that problem, because each commit fills it with the model that
+actually wrote that commit.
 
 **Before creating any new branch:** `git fetch origin` then `git status -sb`
 (or `git log main..origin/main`) to confirm local `main` matches `origin/main`.
@@ -96,7 +35,9 @@ branch off stale local `main`, it causes avoidable conflicts/merge noise later.
 One logical change per commit. Claude may `git push` and open PRs (`gh pr
 create`) autonomously on feature branches (not `main`) without asking first;
 never force-push, never merge a PR, never push directly to `main`. If
-verification fails or was skipped — say so and don't commit.
+verification fails or was skipped — say so and don't commit. Commits written by
+Codex or Gemini are pushed only after Claude's review records them (the
+`pre-push` hook enforces this).
 
 ## Environment notes
 
