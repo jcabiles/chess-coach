@@ -81,6 +81,12 @@ def _validate_trap(trap: dict) -> Optional[str]:
     if missing:
         return f"missing required fields: {missing}"
 
+    if not isinstance(trap["id"], str):
+        return f"id must be a string, got {trap['id']!r}"
+    if not isinstance(trap["name"], str):
+        return f"name must be a string, got {trap['name']!r}"
+    if not isinstance(trap["color"], str):
+        return f"color must be a string, got {trap['color']!r}"
     if trap["color"] not in _VALID_COLORS:
         return f"invalid color: {trap['color']!r}"
 

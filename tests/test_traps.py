@@ -7,6 +7,7 @@ No Stockfish needed. Uses tests/fixtures/traps_sample.json only.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import chess
 import pytest
@@ -98,6 +99,27 @@ class TestSummariesOrdering:
         assert ids.index("ruy-lopez-trap") < ids.index("albin-counter-trap"), (
             f"Expected ruy-lopez-trap before albin-counter-trap, got: {ids}"
         )
+
+
+def test_load_drops_traps_with_unusable_id_color_or_name(tmp_path, caplog):
+    """Malformed identity and display fields are warned about without aborting load."""
+    valid = json.loads(Path(FIXTURE_PATH).read_text(encoding="utf-8"))["traps"][0]
+    malformed = []
+    for field, value in (("id", ["bad-id"]), ("color", ["white"]), ("name", 7)):
+        trap = json.loads(json.dumps(valid))
+        trap["id"] = f"bad-{field}"
+        trap[field] = value
+        malformed.append(trap)
+    path = tmp_path / "traps.json"
+    path.write_text(json.dumps({"traps": [*malformed, valid]}), encoding="utf-8")
+
+    traps.load(str(path))
+
+    assert list(traps.traps_by_id) == [valid["id"]]
+    assert [summary["id"] for summary in traps.summaries()] == [valid["id"]]
+    assert traps.start_epd_index
+    assert "dropping trap" in caplog.text
+    assert caplog.text.count("dropping trap") == 3
 
 
 # ---------------------------------------------------------------------------
