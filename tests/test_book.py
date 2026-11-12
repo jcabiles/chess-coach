@@ -6,6 +6,8 @@ Uses tests/fixtures/book_sample.json + synthetic UCI lines; no Stockfish needed.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import chess
 import pytest
 
@@ -102,4 +104,34 @@ def test_blocklist_is_in_cache_signature():
     assert book.is_book_move(b.fen(), "g1f3") is True
     book.load(FIXTURE, lines=[line], trap_ucis=[], blocklist_epds=[blocked.epd()])
     assert book.is_book_move(b.fen(), "g1f3") is False  # rebuilt, not stale
+    book.load(MISSING)
+
+
+def test_config_rewrite_is_in_cache_signature(tmp_path):
+    config_path = tmp_path / "book.json"
+    original_config = Path(FIXTURE).read_text(encoding="utf-8")
+    config_path.write_text(original_config, encoding="utf-8")
+    start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+    book.load(str(config_path), lines=[["e2e4"]], trap_ucis=[])
+    assert book.is_book_move(start, "d2d4") is False
+
+    rewritten_config = original_config.replace(
+        '"extraLines": []',
+        '"extraLines": [{"moves": "1. d4 d5"}]',
+    )
+    config_path.write_text(rewritten_config, encoding="utf-8")
+    book.load(str(config_path), lines=[["e2e4"]], trap_ucis=[])
+    assert book.is_book_move(start, "d2d4") is True
+    book.load(MISSING)
+
+
+def test_unchanged_config_hits_cache(tmp_path):
+    config_path = tmp_path / "book.json"
+    config_path.write_text(Path(FIXTURE).read_text(encoding="utf-8"), encoding="utf-8")
+
+    first = book.load(str(config_path), lines=[["e2e4"]], trap_ucis=[])
+    second = book.load(str(config_path), lines=[["e2e4"]], trap_ucis=[])
+
+    assert second is first
     book.load(MISSING)

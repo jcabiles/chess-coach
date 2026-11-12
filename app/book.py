@@ -16,6 +16,7 @@ works even when Stockfish is absent.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -145,7 +146,19 @@ def load(
     traps_list = [tuple(t) for t in trap_ucis]
     blocklist = frozenset(blocklist_epds)
     resolved_cfg = str(config_path if config_path is not None else os.environ.get("BOOK_FILE", "data/book.json"))
-    sig = (resolved_cfg, len(lines_list), len(traps_list), hash(tuple(lines_list)), hash(tuple(traps_list)), hash(blocklist))
+    try:
+        config_hash = hashlib.sha256(Path(resolved_cfg).read_bytes()).hexdigest()
+    except OSError:
+        config_hash = None
+    sig = (
+        resolved_cfg,
+        config_hash,
+        len(lines_list),
+        len(traps_list),
+        hash(tuple(lines_list)),
+        hash(tuple(traps_list)),
+        hash(blocklist),
+    )
     if sig == _cache_sig and not _index.empty:
         return _index
 
