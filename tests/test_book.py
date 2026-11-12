@@ -103,3 +103,12 @@ def test_blocklist_is_in_cache_signature():
     book.load(FIXTURE, lines=[line], trap_ucis=[], blocklist_epds=[blocked.epd()])
     assert book.is_book_move(b.fen(), "g1f3") is False  # rebuilt, not stale
     book.load(MISSING)
+
+
+def test_epds_for_san_movetext_glued_move_numbers():
+    # Glued move numbers should parse correctly; illegal moves yield [].
+    assert len(book._epds_for_san_movetext("1.e4 e5 2.Nf3")) == 3
+    assert len(book._epds_for_san_movetext("1. e4 1... e5")) == 2
+    assert len(book._epds_for_san_movetext("1.e4 1...e5")) == 2
+    assert book._epds_for_san_movetext("1.e4 e5 2.Nf3 3.illegal") == []
+    assert book._epds_for_san_movetext("1.e5") == []

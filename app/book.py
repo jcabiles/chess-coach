@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Optional
@@ -26,6 +27,8 @@ from typing import Iterable, Optional
 import chess
 
 logger = logging.getLogger(__name__)
+
+_MOVE_NUM_RE = re.compile(r"^\d*\.+")
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +99,7 @@ def _epds_for_san_movetext(movetext: str) -> list[str]:
     board = chess.Board()
     epds: list[str] = []
     for tok in movetext.split():
-        t = tok.rstrip(".")
+        t = _MOVE_NUM_RE.sub("", tok).rstrip(".")
         if not t or t.isdigit():  # move number ("1.", "12") or stray dots
             continue
         try:
