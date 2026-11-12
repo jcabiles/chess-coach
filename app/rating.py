@@ -18,7 +18,7 @@ Return shape of build_rating():
         "k": int,              # 32
         "botElo": int | None,  # round(cur), None when no counted games
         "gamesCounted": int,
-        "gamesSkipped": int,   # rated bot games with no valid personaElo
+        "gamesSkipped": int,   # rated bot games with no valid personaElo (missing, not an integer, or outside 100-4000)
         "history": [{"gameId", "opponentElo", "score", "eloAfter"} ...],
     }
 
@@ -40,6 +40,8 @@ from app import storage
 
 SEED_ELO = 1350
 K = 32
+MIN_PERSONA_ELO = 100
+MAX_PERSONA_ELO = 4000
 
 
 def elo_update(cur: float, opponent: float, score: float, k: float) -> float:
@@ -95,7 +97,11 @@ def build_rating() -> dict:
         if headers.get("rated") is not True:
             continue
         opp = headers.get("personaElo")
-        if not (isinstance(opp, int) and not isinstance(opp, bool)):
+        if not (
+            isinstance(opp, int)
+            and not isinstance(opp, bool)
+            and MIN_PERSONA_ELO <= opp <= MAX_PERSONA_ELO
+        ):
             games_skipped += 1
             continue
         score = user_score(row["result"], row["my_color"])

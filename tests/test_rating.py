@@ -225,6 +225,58 @@ def test_build_rating_invalid_persona_elo_is_skipped(tmp_path, opp):
 
 
 @pytest.mark.parametrize(
+    "opp",
+    [99, 4001, -5, 10000000],
+)
+def test_build_rating_out_of_bounds_persona_elo_is_skipped(tmp_path, opp):
+    _init_db(tmp_path)
+    _insert(
+        content_hash="bad_opp_bounds",
+        imported_at="2026-01-01T10:00:00",
+        headers={"rated": True, "personaElo": opp},
+    )
+    out = build_rating()
+    assert out["gamesCounted"] == 0
+    assert out["gamesSkipped"] == 1
+
+
+@pytest.mark.parametrize(
+    "opp",
+    [100, 4000],
+)
+def test_build_rating_boundary_persona_elo_is_counted(tmp_path, opp):
+    _init_db(tmp_path)
+    _insert(
+        content_hash="boundary_opp",
+        imported_at="2026-01-01T10:00:00",
+        headers={"rated": True, "personaElo": opp},
+    )
+    out = build_rating()
+    assert out["gamesCounted"] == 1
+    assert out["gamesSkipped"] == 0
+
+
+def test_build_rating_absurd_persona_elo_skipped_and_rating_still_computes(tmp_path):
+    _init_db(tmp_path)
+    _insert(
+        content_hash="valid_game",
+        imported_at="2026-01-01T10:00:00",
+        result="1-0",
+        headers={"rated": True, "personaElo": 1550},
+    )
+    _insert(
+        content_hash="absurd_game",
+        imported_at="2026-01-02T10:00:00",
+        result="1-0",
+        headers={"rated": True, "personaElo": 10000000},
+    )
+    out = build_rating()
+    assert out["gamesCounted"] == 1
+    assert out["gamesSkipped"] == 1
+    assert out["botElo"] == 1374
+
+
+@pytest.mark.parametrize(
     "raw",
     [None, "[]", "null", "{bad json", '"scalar"', "42"],
 )
