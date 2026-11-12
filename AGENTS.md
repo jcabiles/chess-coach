@@ -79,7 +79,7 @@ repo; if the ticket needs one, stop and say so.
    approval, because this writes to `.git`). It refuses a ticket whose branch already exists,
    which means another session has it. It branches from the local `main` branch, which the
    caller keeps current; Codex has no network to fetch it.
-3. **Work only inside `.worktrees/<id>`.** Start Codex from the repo root. `make ticket` links
+3. **Work only inside `.worktrees/<id>`.** Start Codex from the repo root, then run every command, check and commit inside the worktree (`cd .worktrees/<id>` first); a commit made from the root lands on the default branch. `make ticket` links
    the main checkout's `.venv` into the worktree; never install packages
    there, because Codex has no network.
 4. **Write the failing test first.** Add a test that fails because of the bug, then fix the code,
