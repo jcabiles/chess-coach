@@ -66,26 +66,34 @@ live server is not available, check routes in-process with FastAPI's `TestClient
 
 ## Working an agent ticket
 
-1. **Pick.** Use the ticket your prompt names. Otherwise take the first unchecked ticket in
-   `docs/ai-dlc/agent-tickets.md` whose branch does not exist yet (`git branch --list 'ticket/*'`).
-   If none is left, stop and say so.
-2. **Claim it** from the repo root with `make ticket ID=<id>`. It refuses a ticket whose branch
-   already exists, which means another session has it.
-   - Codex: this writes to `.git`, so it asks the project owner's approval.
-   - Gemini (agy) cannot run commands. Work only if you were started inside that ticket's
-     worktree (`.worktrees/<id>`); otherwise stop and say which ticket you would take.
-3. **Work only inside `.worktrees/<id>`.** Start the session from the repo root (Codex) so the
-   main checkout's `.venv` stays readable.
+**The ticket is the authority for the session.** Session-start checklists for roadmap work
+elsewhere in this file or in `CLAUDE.md` do not apply to an agent ticket. Never read another
+repo; if the ticket needs one, stop and say so.
+
+1. **Pick.** Use the ticket your prompt names. Otherwise (Codex or Claude) take the first
+   unchecked ticket in `docs/ai-dlc/agent-tickets.md` whose branch does not exist yet
+   (`git branch --list 'ticket/*'`). If none is left, stop and say so. Gemini never picks: the
+   caller names its ticket, claims it and starts Gemini inside `.worktrees/<id>`; started
+   anywhere else, Gemini stops and says which ticket it would take.
+2. **Claim it** from the repo root with `make ticket ID=<id>` (Codex asks the project owner's
+   approval, because this writes to `.git`). It refuses a ticket whose branch already exists,
+   which means another session has it. It branches from the local `main` branch, which the
+   caller keeps current; Codex has no network to fetch it.
+3. **Work only inside `.worktrees/<id>`.** Start Codex from the repo root. `make ticket` links
+   the main checkout's `.venv` into the worktree; never install packages
+   there, because Codex has no network.
 4. **Write the failing test first.** Add a test that fails because of the bug, then fix the code,
-   then confirm the test passes. Change only what the ticket needs.
+   then confirm the test passes. Change only what the ticket needs. Gemini writes the test and
+   the fix but cannot run them, and says so.
 5. **Run `make check` inside the worktree** and report its last lines. Gemini cannot run it: say
    so, and the caller runs it.
-6. **Commit** (Codex asks approval; Gemini never commits and lists its changed files instead):
+6. **Commit** (Codex asks approval; Gemini never commits):
    - Subject: Conventional Commits (`fix:`, `test:`, `refactor:`, `docs:`, `chore:`),
      imperative, at most 50 characters. The body says why when it is not obvious.
    - End with the two trailer lines from the shared rules (`Agent-Vendor:`, `Agent-Model:`).
    - One logical change per commit; never commit work in progress.
-7. **Stop and report:** the ticket, the commit hash, the check result and anything left undone.
+7. **Stop and report:** the ticket, the commit hash and the check result (Gemini: the changed
+   files and "check not run"), and anything left undone.
 
 ## Git checks on every commit
 
