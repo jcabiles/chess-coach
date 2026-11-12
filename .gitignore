@@ -50,3 +50,6 @@ scripts/bulk_import.py
 data/avatars/
 # Local bot names/photos (see data/profiles.example.json); never commit.
 data/profiles.local.json
+
+# Agent ticket worktrees (make ticket ID=...)
+.worktrees/
